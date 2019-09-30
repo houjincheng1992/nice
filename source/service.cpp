@@ -4,11 +4,11 @@
 
 #include "utils/logger.h"
 
-namespace nice {
-void NiceService::check_excel_status(
+namespace nicer {
+void NicerService::check_excel_status(
                         ::google::protobuf::RpcController* controller,
-                        const ::nice::HttpRequest* request,
-                        ::nice::HttpResponse* response,
+                        const ::nicer::HttpRequest* request,
+                        ::nicer::HttpResponse* response,
                         ::google::protobuf::Closure* done) {
     brpc::ClosureGuard guard(done);
     brpc::Controller* ctrl = static_cast<brpc::Controller*>(controller);

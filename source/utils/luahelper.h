@@ -12,7 +12,7 @@
 #include <map>
 #include <string>
 
-namespace nice {
+namespace nicer {
 namespace utils {
 
 class LuaHelper {

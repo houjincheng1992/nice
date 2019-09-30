@@ -1,5 +1,5 @@
 syntax="proto2";
-package nice;
+package nicer;
 
 option cc_generic_services = true;
 

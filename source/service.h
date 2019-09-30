@@ -12,18 +12,18 @@
 
 #include "proto/http.pb.h"
 
-namespace nice {
+namespace nicer {
 
-class NiceService : public ::nice::HttpService {
+class NicerService : public ::nicer::HttpService {
 public:
-    NiceService() {};
-    ~NiceService() {};
+    NicerService() {};
+    ~NicerService() {};
 
     virtual void check_excel_status(::google::protobuf::RpcController* controller,
-                        const ::nice::HttpRequest* request,
-                        ::nice::HttpResponse* response,
+                        const ::nicer::HttpRequest* request,
+                        ::nicer::HttpResponse* response,
                         ::google::protobuf::Closure* done);
 };
 
-}//namespace nice
+}//namespace nicer
 /* Powered by Microsoft Visual Studio 2013, @2017*/

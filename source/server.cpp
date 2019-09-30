@@ -49,7 +49,7 @@ int main(int argc, char* argv[]) {
 
     brpc::Server server;
     // server.set_version(_SERVER_VERSION);
-    int32_t ret = server.AddService(new ::nice::niceService,
+    int32_t ret = server.AddService(new ::nicer::NicerService,
                             brpc::SERVER_OWNS_SERVICE,
                             "/fileupload/check_excel_status => check_excel_status");
     if (ret != 0) {

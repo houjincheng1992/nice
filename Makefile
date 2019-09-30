@@ -1,6 +1,6 @@
 NEED_GPERFTOOLS=0
 NICE_PATH=./
-BRPC_PATH=../brpc/incubator-brpc
+BRPC_PATH=../incubator-brpc
 include $(BRPC_PATH)/config.mk
 # Notes on the flags:
 # 1. Added -fno-omit-frame-pointer: perf/tcmalloc-profiler use frame pointers by default

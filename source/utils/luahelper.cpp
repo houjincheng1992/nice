@@ -9,7 +9,7 @@
 #include "luahelper.h"
 #include "utils/logger.h"
 
-namespace nice {
+namespace nicer {
 namespace utils {
 
 LuaHelper::LuaHelper() {}
