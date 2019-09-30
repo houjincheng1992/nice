@@ -1,5 +1,5 @@
 NEED_GPERFTOOLS=0
-MUSKETEERS_PATH=./
+NICE_PATH=./
 BRPC_PATH=../brpc/incubator-brpc
 include $(BRPC_PATH)/config.mk
 # Notes on the flags:
@@ -20,8 +20,6 @@ LIBPATHS=$(addprefix -L, $(LIBS))
 HDRS+=./thirdparty/lua/include
 LIBS+=./thirdparty/lua/lib
 HDRS+=./thirdparty/rapidjson/include
-HDRS+=/usr/include/mysql
-LIBS+=/usr/lib64/mysql
 HDRS+=./source
 
 COMMA=,
@@ -52,14 +50,14 @@ else ifeq ($(SYSTEM),Linux)
 endif
 
 .PHONY:all
-all: musketeers
+all: nice
 
 .PHONY:clean
 clean:
 	@echo "Cleaning"
-	@rm -rf musketeers $(PROTO_GENS) $(PROTO_OBJS) $(SERVER_OBJS)
+	@rm -rf nice $(PROTO_GENS) $(PROTO_OBJS) $(SERVER_OBJS)
 
-musketeers:$(PROTO_OBJS) $(SERVER_OBJS)
+nice:$(PROTO_OBJS) $(SERVER_OBJS)
 	@echo "Linking $@"
 ifneq ("$(LINK_SO)", "")
 	@$(CXX) $(LIBPATHS) $(SOPATHS) $(LINK_OPTIONS_SO) -o $@
@@ -73,7 +71,7 @@ endif
 
 %.o:%.cpp
 	@echo "Compiling $@"
-	@$(CXX) -c -I$(MUSKETEERS_PATH) $(HDRPATHS) $(CXXFLAGS) $< -o $@
+	@$(CXX) -c -I$(NICE_PATH) $(HDRPATHS) $(CXXFLAGS) $< -o $@
 
 %.o:%.cc
 	@echo "Compiling $@"
