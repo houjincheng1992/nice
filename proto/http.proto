@@ -1,0 +1,11 @@
+syntax="proto2";
+package nice;
+
+option cc_generic_services = true;
+
+message HttpRequest {};
+message HttpResponse {};
+
+service HttpService {
+    rpc check_excel_status(HttpRequest) returns (HttpResponse);
+};
