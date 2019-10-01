@@ -37,32 +37,41 @@ void NicerService::check_excel_status(
         xls::xlsWorkSheet *work_sheet = xls::xls_getWorkSheet(wb, i);
         error = xls::xls_parseWorkSheet(work_sheet);
         // rows
-        for (int32_t j = 0; j <= work_sheet->rows.lastrow; j++) {
-            xls::xlsRow *row = xls::xls_row(work_sheet, j);
+        int32_t rows_num = work_sheet->rows.lastrow;
+        int32_t cols_num = work_sheet->rows.lastcol;
 
-            int32_t cols_num = work_sheet->rows.lastcol;
-            if (j == 0 && cols_num == 0) {
+        if (rows_num <= 1) {
+            continue;
+        }
+        xls::xlsRow *row = xls::xls_row(work_sheet, 0);
+        for (int32_t col = 0; col < cols_num; ++col) {
+            xls::xlsCell *cell = &row->cells.cell[col];
+            if (cell->str == NULL) {
+                err_msg.emplace_back("请检查标题");
                 break;
             }
+            titles.emplace_back(cell->str);
+        }
+
+        if (err_msg.size()) {
+            continue;
+        }
+
+        for (int32_t j = 1; j < rows_num; j++) {
+            xls::xlsRow *row = xls::xls_row(work_sheet, j);
 
             // columns
             if (cols_num > titles.size()) {
-                msg = "第" + std::to_string(j + 1) + "行数据的列数超出标题列数，请检查";
+                // msg = "第" + std::to_string(j + 1) + "行数据的列数超出标题列数，请检查";
                 err_msg.emplace_back(msg);
             }
 
-            for (int32_t k = 0; k <= cols_num; k++) {
+            for (int32_t k = 0; k < cols_num; k++) {
                 xls::xlsCell *cell = &row->cells.cell[k];
-                if (j == 0 && cell->str != NULL) {
-                    titles.emplace_back(cell->str);
-                    continue;
-                } else if (j == 0) {
-                    err_msg.emplace_back("标题格式有误");
-                    break;
-                } else if (cell->str != NULL) {
+                if (cell->str != NULL) {
                     datas.emplace_back(cell->str);
                 } else {
-                    msg = "第" + std::to_string(j + 1) + "行第" + std::to_string(k + 1) + "列数据异常，请检查";
+                    // msg = "第" + std::to_string(j + 1) + "行第" + std::to_string(k + 1) + "列数据异常，请检查";
                     err_msg.emplace_back(msg);
                 }
                 
