@@ -1,7 +1,5 @@
 #include "service.h"
 
-#include <mysql/mysql.h>
-
 #include "utils/logger.h"
 
 namespace nicer {

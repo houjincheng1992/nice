@@ -9,8 +9,8 @@ CXXFLAGS+=$(CPPFLAGS) -std=c++11 -DNDEBUG -O2 -D__const__= -pipe -W -Wall -Wno-u
 ifeq ($(NEED_GPERFTOOLS), 1)
 	CXXFLAGS+=-DBRPC_ENABLE_CPU_PROFILER
 endif
-HDRS+=$(BRPC_PATH)/output/include
-LIBS+=$(BRPC_PATH)/output/lib
+HDRS+=$(BRPC_PATH)/bld/output/include
+LIBS+=$(BRPC_PATH)/bld/output/lib
 
 HDRS+=./thirdparty/lua/include
 LIBS+=./thirdparty/lua/lib
@@ -44,20 +44,19 @@ ifeq ($(SYSTEM),Darwin)
 else ifeq ($(SYSTEM),Linux)
 	STATIC_LINKINGS += -lbrpc
 	STATIC_LINKINGS += -llua
-	STATIC_LINKINGS += -lmysqlclient
 	LINK_OPTIONS_SO = -Xlinker "-(" $^ -Xlinker "-)" $(STATIC_LINKINGS) $(DYNAMIC_LINKINGS)
 	LINK_OPTIONS = -Xlinker "-(" $^ -Wl,-Bstatic $(STATIC_LINKINGS) -Wl,-Bdynamic -Xlinker "-)" $(DYNAMIC_LINKINGS)
 endif
 
 .PHONY:all
-all: nice
+all: nicer
 
 .PHONY:clean
 clean:
 	@echo "Cleaning"
-	@rm -rf nice $(PROTO_GENS) $(PROTO_OBJS) $(SERVER_OBJS)
+	@rm -rf nicer $(PROTO_GENS) $(PROTO_OBJS) $(SERVER_OBJS)
 
-nice:$(PROTO_OBJS) $(SERVER_OBJS)
+nicer:$(PROTO_OBJS) $(SERVER_OBJS)
 	@echo "Linking $@"
 ifneq ("$(LINK_SO)", "")
 	@$(CXX) $(LIBPATHS) $(SOPATHS) $(LINK_OPTIONS_SO) -o $@

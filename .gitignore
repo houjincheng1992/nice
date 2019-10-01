@@ -1,0 +1,6 @@
+source/*.o
+source/*/*.o
+proto/*.o
+proto/*.h
+proto/*.cpp
+nicer
