@@ -15,12 +15,13 @@ LIBS+=$(BRPC_PATH)/bld/output/lib
 HDRS+=./thirdparty/lua/include
 LIBS+=./thirdparty/lua/lib
 
+HDRS+=./thirdparty/rapidjson/include
+
+HDRS+=/usr/local/include
+LIBS+=/usr/local/lib
+
 HDRPATHS=$(addprefix -I, $(HDRS))
 LIBPATHS=$(addprefix -L, $(LIBS))
-HDRS+=./thirdparty/lua/include
-LIBS+=./thirdparty/lua/lib
-HDRS+=./thirdparty/rapidjson/include
-HDRS+=./source
 
 COMMA=,
 SOPATHS=$(addprefix -Wl$(COMMA)-rpath$(COMMA), $(LIBS))
@@ -44,6 +45,7 @@ ifeq ($(SYSTEM),Darwin)
 else ifeq ($(SYSTEM),Linux)
 	STATIC_LINKINGS += -lbrpc
 	STATIC_LINKINGS += -llua
+	DYNAMIC_LINKINGS += -lxlsreader
 	LINK_OPTIONS_SO = -Xlinker "-(" $^ -Xlinker "-)" $(STATIC_LINKINGS) $(DYNAMIC_LINKINGS)
 	LINK_OPTIONS = -Xlinker "-(" $^ -Wl,-Bstatic $(STATIC_LINKINGS) -Wl,-Bdynamic -Xlinker "-)" $(DYNAMIC_LINKINGS)
 endif
