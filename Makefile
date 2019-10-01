@@ -20,6 +20,8 @@ HDRS+=./thirdparty/rapidjson/include
 HDRS+=/usr/local/include
 LIBS+=/usr/local/lib
 
+HDRS+=./source
+
 HDRPATHS=$(addprefix -I, $(HDRS))
 LIBPATHS=$(addprefix -L, $(LIBS))
 

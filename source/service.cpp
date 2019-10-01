@@ -1,5 +1,9 @@
 #include "service.h"
 
+#include <string>
+#include <vector>
+
+#include <butil/time.h>
 #include "xls.h"
 
 #include "utils/logger.h"
@@ -10,49 +14,61 @@ void NicerService::check_excel_status(
                         const ::nicer::HttpRequest* request,
                         ::nicer::HttpResponse* response,
                         ::google::protobuf::Closure* done) {
+    struct timeval tv, tv1;
+    gettimeofday(&tv,NULL);
     brpc::ClosureGuard guard(done);
     brpc::Controller* ctrl = static_cast<brpc::Controller*>(controller);
 
-    std::string str = cntl->request_attachment().to_string();
+    std::string str = ctrl->request_attachment().to_string();
 
-    xls_error_t error = LIBXLS_OK;
-    xlsWorkBook *wb = xls_open_buffer(str.c_str(), str.size(), "UTF-8", &error);
+    xls::xls_error_t error = xls::LIBXLS_OK;
+    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)str.c_str(), str.size(), "UTF-8", &error);
     if (wb == NULL) {
         printf("Error reading file: %s\n", xls_getError(error));
         exit(1);
     }
+
+    std::vector<std::string> titles;
+    std::vector<std::string> err_msg;
+    std::string msg;
     for (int32_t i = 0; i < wb->sheets.count; i++) { // sheets
-        xl_WorkSheet *work_sheet = xls_getWorkSheet(work_book, i);
-        error = xls_parseWorkSheet(work_sheet);
-        for (int32_t j = 0; j <= work_sheet->rows.lastrow; j++) { // rows
-            xlsRow *row = xls_row(work_sheet, j);
-            for (int32_t k=0; k <= work_sheet->rows.lastcol; k++) { // columns
-                xlsCell *cell = &row->cells.cell[k];
-                // do something with cell
-                if (cell->id == XLS_RECORD_BLANK) {
-                    // do something with a blank cell
-                } else if (cell->id == XLS_RECORD_NUMBER) {
-                   // use cell->d, a double-precision number
-                } else if (cell->id == XLS_RECORD_FORMULA) {
-                    if (strcmp(cell->str, "bool") == 0) {
-                        // its boolean, and test cell->d > 0.0 for true
-                    } else if (strcmp(cell->str, "error") == 0) {
-                        // formula is in error
-                    } else {
-                        // cell->str is valid as the result of a string formula.
-                    }
-                } else if (cell->str != NULL) {
-                    // cell->str contains a string value
+        xls::xlsWorkSheet *work_sheet = xls::xls_getWorkSheet(wb, i);
+        error = xls::xls_parseWorkSheet(work_sheet);
+        // rows
+        for (int32_t j = 0; j <= work_sheet->rows.lastrow; j++) {
+            xls::xlsRow *row = xls::xls_row(work_sheet, j);
+
+            int32_t cols_num = work_sheet->rows.lastcol;
+            if (j == 0 && cols_num == 0) {
+                break;
+            }
+
+            // columns
+            if (cols_num > titles.size()) {
+                msg = "第" + std::to_string(j) + "行数据的列数异常";
+                err_msg.emplace_back(msg)
+            }
+
+            for (int32_t k = 0; k <= cols_num; k++) {
+                xls::xlsCell *cell = &row->cells.cell[k];
+                if (j == 0) {
+                    titles.emplace_back(cell->str);
+                }
+                
+                if (cell->str != NULL) {
+                    INFLOG << cell->str;
                 }
             }
         }
-        xls_close_WS(work_sheet);
+        xls::xls_close_WS(work_sheet);
     }
-    xls_close_WB(wb);
+    xls::xls_close_WB(wb);
 
     ctrl->http_response().set_content_type("application/json;charset=utf-8");
     std::string response_str = "{\"haha\":\"nihao\"}";
     INFLOG << "here";
     ctrl->response_attachment().append(response_str);
+    gettimeofday(&tv1,NULL);
+    INFLOG << "gettimeofday cost: " << (tv1.tv_sec - tv.tv_sec)*1000.0 + (tv1.tv_usec - tv.tv_usec)/1000.0<< "ms";
 }
 }
