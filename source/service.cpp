@@ -1,9 +1,11 @@
 #include "service.h"
 
+#include <limits>
 #include <set>
 #include <string>
 #include <vector>
 #include <boost/algorithm/string/join.hpp>
+#include <boost/algorithm/string/split.hpp>
 
 #include <butil/time.h>
 #include "xls.h"
@@ -23,6 +25,10 @@ static const std::vector<std::string> optional_fields = {
     "左眼串镜", "右眼串镜", "左眼屈光不正", "右眼屈光不正",
 };
 
+std::string msg_format(int32_t row_num, const std::string& name, const std::string& standard) {
+    return "第" + std::to_string(row_num) + "行, " + name + "：数据有误，数据格式错误或者超出数据导入范围（" + standard + "）。";
+}
+
 bool row_validate(
         std::map<std::string, int32_t>& title_index,
         std::vector<std::string>& row_data,
@@ -33,7 +39,7 @@ bool row_validate(
         if (field_name == "身高") {
             float height = utils::NumUtils::stof(row_data[title_index[field_name]]);
             if(height < 80 || height > 250){
-                msg = "第" + std::to_string(row_num + 1) + "行, 身高：数据有误，数据格式错误或者超出数据导入范围（80—250厘米）。";
+                msg = msg_format(row_num + 1, field_name, "80—250厘米")
                 err_msg.emplace_back(msg);
                 return false;
             }
@@ -41,7 +47,7 @@ bool row_validate(
         } else if (field_name == "体重") {
             float weight = utils::NumUtils::stof(row_data[title_index[field_name]]);
             if(weight < 14 || weight > 200){
-                msg = "第" + std::to_string(row_num + 1) + "行, 体重：数据有误，数据格式错误或者超出数据导入范围（14—200公斤）。";
+                msg = msg_format(row_num + 1, field_name, "14—200公斤");
                 err_msg.emplace_back(msg);
                 return false;
             }
@@ -49,11 +55,154 @@ bool row_validate(
         } else if (field_name == "肺活量") {
             int32_t lung_capacity = utils::NumUtils::stoi(row_data[title_index[field_name]]);
             if (lung_capacity < 500 || lung_capacity > 9999) {
-                msg = "第" + std::to_string(row_num + 1) + "行, 肺活量：数据有误，数据格式错误或者超出数据导入范围（500－9999毫升）。";
+                msg = msg_format(row_num + 1, field_name, "500－9999毫升");
                 err_msg.emplace_back(msg);
                 return false;
             }
             continue;
+        } else if (field_name == "50米跑") {
+            float run_50m = utils::NumUtils::stof(row_data[title_index[field_name]]);
+            if (run_50m < 5 || run_50m > 20) {
+                msg = msg_format(row_num + 1, field_name, "5-20秒");
+                err_msg.emplace_back(msg);
+                return false;
+            }
+            continue;
+        } else if (field_name == "坐位体前屈") {
+            float sitting_body_flexion = utils::NumUtils::stof(row_data[title_index[field_name]]);
+            if (sitting_body_flexion < -30 || sitting_body_flexion > 40) {
+                msg = msg_format(row_num + 1, field_name, "－30—40厘米");
+                err_msg.emplace_back(msg);
+                return false;
+            }
+            continue;
+        } else if (field_name == "一分钟跳绳") {
+            float skip_one_minute = utils::NumUtils::stoi(row_data[title_index[field_name]]);
+            if (skip_one_minute < 0 || skip_one_minute > 300) {
+                msg = msg_format(row_num + 1, field_name, "0—300次/分钟");
+                err_msg.emplace_back(msg);
+                return false;
+            }
+            continue;
+        } else if (field_name == "一分钟仰卧起坐") {
+            int32_t sit_up_one_minute = utils::NumUtils::stoi(row_data[title_index[field_name]]);
+            if (sit_up_one_minute < 0 || sit_up_one_minute > 99) {
+                msg = msg_format(row_num + 1, field_name, "0－99次/分钟");
+                err_msg.emplace_back(msg);
+                return false;
+            }
+            continue;
+        } else if (field_name == "50米×8往返跑" || field_name == "400米跑") {
+            std::string round_trip_50_8 = row_data[title_index[field_name]];
+            if (round_trip_50_8.empty()) {
+                msg = msg_format(row_num + 1, field_name, "0′45″—4′00″分·秒");
+                err_msg.emplace_back(msg);
+                return false;
+            }
+            std::set<std::string> seperate = {"\"", "″", "”"};
+            if (seperate.count(round_trip_50_8[-1])) {
+                round_trip_50_8 = round_trip_50_8.substr(0, round_trip_50_8.size() - 1);
+            }
+
+            std::vector<std::string> split_vec;
+            boost::algorithm::split(split_vec, round_trip_50_8, boost::is_any_of("′’'"));
+            if (split_vec.size() == 2) {
+                if (split_vec[1].size() != 2) {
+                    msg = msg_format(row_num + 1, field_name, "0′45″—4′00″分·秒");
+                    err_msg.emplace_back(msg);
+                    return false;
+                }
+                int32_t minute = utils::NumUtils::stoi(split_vec[0]);
+                int32_t second = utils::NumUtils::stoi(split_vec[1]);
+
+                if (minute < 0 || minute > 4 || minute == 4 && second != 0 || second < 0 || second > 59) {
+                    msg = msg_format(row_num + 1, field_name, "0′45″—4′00″分·秒");
+                    err_msg.emplace_back(msg);
+                    return false;
+                }
+            }
+            continue;
+        } else if (field_name == "引体向上") {
+            int32_t pull_up = utils::NumUtils::stoi(row_data[title_index[field_name]]);
+            if (pull_up < 0 || pull_up > 99) {
+                msg = msg_format(row_num + 1, field_name, "0—99次");
+                err_msg.emplace_back(msg);
+                return false;
+            }
+            continue;
+        } else if (field_name == "立定跳远") {
+            int32_t stand_jump = utils::NumUtils::stoi(row_data[title_index[field_name]]);
+            if (stand_jump < 50 || stand_jump > 400) {
+                msg = msg_format(row_num + 1, field_name, "50—400厘米");
+                err_msg.emplace_back(msg);
+                return false;
+            }
+            continue;
+        } else if (field_name == "1000米跑" || field_name == "800米跑") {
+            std::string run_1km = row_data[title_index[field_name]];
+            if (run_1km.empty()) {
+                msg = msg_format(row_num + 1, field_name, "2′00″－9′00″分·秒");
+                err_msg.emplace_back(msg);
+                return false;
+            }
+            std::set<std::string> seperate = {"\"", "″", "”"};
+            if (seperate.count(round_trip_50_8[-1])) {
+                round_trip_50_8 = round_trip_50_8.substr(0, round_trip_50_8.size() - 1);
+            }
+
+            std::vector<std::string> split_vec;
+            boost::algorithm::split(split_vec, round_trip_50_8, boost::is_any_of("′’'"));
+            if (split_vec.size() == 2) {
+                if (split_vec[1].size() != 2) {
+                    msg = msg_format(row_num + 1, field_name, "2′00″－9′00″分·秒");
+                    err_msg.emplace_back(msg);
+                    return false;
+                }
+                int32_t minute = utils::NumUtils::stoi(split_vec[0]);
+                int32_t second = utils::NumUtils::stoi(split_vec[1]);
+
+                if (minute < 2 || minute > 9 || minute == 9 && second != 0 || second < 0 || second > 59) {
+                    msg = msg_format(row_num + 1, field_name, "2′00″－9′00″分·秒");
+                    err_msg.emplace_back(msg);
+                    return false;
+                }
+            }
+            continue;
+        } else if (field_name == "左眼裸眼视力" || field_name == "右眼裸眼视力") {
+            float nake_vision = utils::NumUtils::stof(row_data[title_index[field_name]]);
+            if (nake_vision != 0 && (nake_vision < 3 || nake_vision > 5.3)) {
+                msg = msg_format(row_num + 1, field_name, "0或者3~5.3");
+                err_msg.emplace_back(msg);
+                return false;
+            }
+
+            std::string tandem_mirror_name = field_name == "左眼裸眼视力" ? "左眼串镜" : "右眼串镜";
+            float tandem_mirror_value = utils::NumUtils::stof(row_data[title_index[tandem_mirror_name]]);
+            if ((nake_vision > 5.0
+                    || fabs(nake_vision - 5.0) <= std::numeric_limits<float>::epsilon())
+                            && fabs(tandem_mirror_value - 0.0) > std::numeric_limits<float>::epsilon()) {
+                msg = "第" + std::to_string(row_num + 1) + "行, " + tandem_mirror_name + "：裸眼视力大于等于5.0，无需使用串镜检查，数据只能为0。";
+                err_msg.emplace_back(msg);
+                return false;
+            }
+
+            if (nake_vision < 5.0
+                    && (fabs(tandem_mirror_value - 1.0) > std::numeric_limits<float>::epsilon())
+                    && (fabs(tandem_mirror_value + 1.0) > std::numeric_limits<float>::epsilon())
+                    && (fabs(tandem_mirror_value - 2.0) > std::numeric_limits<float>::epsilon())
+                    && (fabs(tandem_mirror_value - 9.0) > std::numeric_limits<float>::epsilon())) {
+                msg = "第"+ std::to_string(row_num + 1)+"行, " + tandem_mirror_name + "：裸眼视力小于5.0，数据只能为-1,1,2,9。";
+                err_msg.emplace_back(msg);
+                return false;
+            }
+            continue;
+        } else if (field_name == "左眼屈光不正" || field_name == "右眼屈光不正") {
+            int32_t ametropia = utils::NumUtils::stoi(row_data[title_index[field_name]]);
+            if (ametropia < 0 || ametropia > 3 && ametropia != 9) {
+                msg = "第" + std::to_string(row_num + 1) + "行, " + field_name + "：数据有误，数据只能为0,1,2,3,9。";
+                err_msg.emplace_back(msg);
+                return false;
+            }
         }
     }
     return true;
