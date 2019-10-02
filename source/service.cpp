@@ -164,7 +164,6 @@ bool row_validate(
                 err_msg.emplace_back(msg);
                 return false;
             }
-            std::string run_1km = row_data[title_index[field_name]];
             if (run_1km.empty()) {
                 msg = msg_format(row_num + 1, field_name, "2′00″－9′00″分·秒");
                 err_msg.emplace_back(msg);
