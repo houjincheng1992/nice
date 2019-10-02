@@ -35,11 +35,14 @@ bool row_validate(
         int32_t row_num,
         std::vector<std::string>& err_msg) {
     std::string msg;
+
+    bool is_high_grade = utils::NumUtils::stoi(row_data[title_index["年级编号"]]) > 20;
+    bool is_male = row_data[title_index["性别"]] == "1";
     for (auto &field_name : optional_fields) {
         if (field_name == "身高") {
             float height = utils::NumUtils::stof(row_data[title_index[field_name]]);
             if(height < 80 || height > 250){
-                msg = msg_format(row_num + 1, field_name, "80—250厘米")
+                msg = msg_format(row_num + 1, field_name, "80—250厘米");
                 err_msg.emplace_back(msg);
                 return false;
             }
@@ -85,6 +88,11 @@ bool row_validate(
             }
             continue;
         } else if (field_name == "一分钟仰卧起坐") {
+            if (is_high_grade && is_male) {
+                msg = "第" + std::to_string(row_num + 1) + "行," + field_name + "：男生没有此测试项目，不能有值。";
+                err_msg.emplace_back(msg);
+                return false;
+            }
             int32_t sit_up_one_minute = utils::NumUtils::stoi(row_data[title_index[field_name]]);
             if (sit_up_one_minute < 0 || sit_up_one_minute > 99) {
                 msg = msg_format(row_num + 1, field_name, "0－99次/分钟");
@@ -100,7 +108,7 @@ bool row_validate(
                 return false;
             }
             std::set<std::string> seperate = {"\"", "″", "”"};
-            if (seperate.count(round_trip_50_8[-1])) {
+            if (seperate.count(&round_trip_50_8[-1])) {
                 round_trip_50_8 = round_trip_50_8.substr(0, round_trip_50_8.size() - 1);
             }
 
@@ -123,6 +131,11 @@ bool row_validate(
             }
             continue;
         } else if (field_name == "引体向上") {
+            if (is_high_grade && !is_male) {
+                msg = "第" + std::to_string(row_num + 1) + "行," + field_name + "：女生没有此测试项目，不能有值。";
+                err_msg.emplace_back(msg);
+                return false;
+            }
             int32_t pull_up = utils::NumUtils::stoi(row_data[title_index[field_name]]);
             if (pull_up < 0 || pull_up > 99) {
                 msg = msg_format(row_num + 1, field_name, "0—99次");
@@ -139,6 +152,15 @@ bool row_validate(
             }
             continue;
         } else if (field_name == "1000米跑" || field_name == "800米跑") {
+            if (field_name == "1000米跑" && is_high_grade && !is_male) {
+                msg = "第" + std::to_string(row_num + 1) + "行," + field_name + "：女生没有此测试项目，不能有值。";
+                err_msg.emplace_back(msg);
+                return false;
+            } else if (field_name == "800米跑" && is_high_grade && is_male) {
+                msg = "第" + std::to_string(row_num + 1) + "行," + field_name + "：男生没有此测试项目，不能有值。";
+                err_msg.emplace_back(msg);
+                return false;
+            }
             std::string run_1km = row_data[title_index[field_name]];
             if (run_1km.empty()) {
                 msg = msg_format(row_num + 1, field_name, "2′00″－9′00″分·秒");
@@ -146,7 +168,7 @@ bool row_validate(
                 return false;
             }
             std::set<std::string> seperate = {"\"", "″", "”"};
-            if (seperate.count(run_1km[-1])) {
+            if (seperate.count(&run_1km[-1])) {
                 run_1km = run_1km.substr(0, run_1km.size() - 1);
             }
 
