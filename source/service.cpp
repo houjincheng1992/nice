@@ -270,8 +270,6 @@ void NicerService::check_excel_status(
             continue;
         }
 
-        INFLOG << "rows: " << rows_num << ", cols: " << cols_num;
-
         std::vector<std::string> titles;    // 标题数组
         std::map<std::string, int32_t> title_index;     // 标题与位置对应关系
         std::vector<std::vector<std::string>> datas;
