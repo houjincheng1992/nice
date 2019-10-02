@@ -1,5 +1,6 @@
 #include "service.h"
 
+#include <set>
 #include <string>
 #include <vector>
 #include <boost/algorithm/string/join.hpp>
@@ -10,6 +11,11 @@
 #include "utils/logger.h"
 
 namespace nicer {
+
+static const std::set<std::string> required_field = {
+    "年级编号", "班级编号", "班级名称", "学籍号", "民族代码", "姓名", "性别", "出生日期", "家庭住址"
+};
+
 void NicerService::check_excel_status(
                         ::google::protobuf::RpcController* controller,
                         const ::nicer::HttpRequest* request,
@@ -29,8 +35,6 @@ void NicerService::check_excel_status(
         exit(1);
     }
 
-    std::vector<std::string> titles;
-    std::vector<std::string> datas;
     std::vector<std::string> err_msg;
     std::string msg;
     for (int32_t i = 0; i < wb->sheets.count; i++) { // sheets
@@ -43,6 +47,10 @@ void NicerService::check_excel_status(
         if (rows_num <= 1) {
             continue;
         }
+
+        std::vector<std::string> titles;    // 标题数组
+        std::map<std::string, int32_t> title_index;     // 标题与位置对应关系
+        std::vector<std::vector<std::string>> datas;
         xls::xlsRow *row = xls::xls_row(work_sheet, 0);
         for (int32_t col = 0; col < cols_num; ++col) {
             xls::xlsCell *cell = &row->cells.cell[col];
@@ -51,8 +59,10 @@ void NicerService::check_excel_status(
                 break;
             }
             titles.emplace_back(cell->str);
+            title_index.emplace(cell->str, col);
         }
 
+        // 会有几个sheet呢? 此处可能会有bug
         if (err_msg.size()) {
             continue;
         }
@@ -62,17 +72,20 @@ void NicerService::check_excel_status(
 
             // columns
             if (cols_num > titles.size()) {
-                // msg = "第" + std::to_string(j + 1) + "行数据的列数超出标题列数，请检查";
+                msg = "第" + std::to_string(j + 1) + "行数据信息项目异常。";
                 err_msg.emplace_back(msg);
+                continue;
             }
 
             for (int32_t k = 0; k < cols_num; k++) {
                 xls::xlsCell *cell = &row->cells.cell[k];
+                if (required_field.count(titles[k]) && (cell->str == NULL || cell->str.empty())) {
+                    msg = "第" + std::to_string(j + 1) + "行，学生信息填写不完整。";
+                    err_msg.emplace_back(msg);
+                    break;
+                }
                 if (cell->str != NULL) {
                     datas.emplace_back(cell->str);
-                } else {
-                    // msg = "第" + std::to_string(j + 1) + "行第" + std::to_string(k + 1) + "列数据异常，请检查";
-                    err_msg.emplace_back(msg);
                 }
                 
             }
