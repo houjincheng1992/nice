@@ -93,6 +93,8 @@ bool row_validate(
                 msg = "第" + std::to_string(row_num + 1) + "行," + field_name + "：男生没有此测试项目，不能有值。";
                 err_msg.emplace_back(msg);
                 return false;
+            } else if (is_high_grade && is_male) {
+                continue;
             }
             int32_t sit_up_one_minute = utils::NumUtils::stoi(sit_up_one_minute_str);
             if (sit_up_one_minute < 0 || sit_up_one_minute > 99) {
@@ -137,6 +139,8 @@ bool row_validate(
                 msg = "第" + std::to_string(row_num + 1) + "行," + field_name + "：女生没有此测试项目，不能有值。";
                 err_msg.emplace_back(msg);
                 return false;
+            } else if (is_high_grade && !is_male) {
+                continue;
             }
             int32_t pull_up = utils::NumUtils::stoi(pull_up_str);
             if (pull_up < 0 || pull_up > 99) {
@@ -163,6 +167,8 @@ bool row_validate(
                 msg = "第" + std::to_string(row_num + 1) + "行," + field_name + "：男生没有此测试项目，不能有值。";
                 err_msg.emplace_back(msg);
                 return false;
+            } else if (field_name == "1000米跑" && is_high_grade && !is_male || field_name == "800米跑" && is_high_grade && is_male) {
+                continue;
             }
             if (run_1km.empty()) {
                 msg = msg_format(row_num + 1, field_name, "2′00″－9′00″分·秒");
