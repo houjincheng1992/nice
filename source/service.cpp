@@ -9,12 +9,52 @@
 #include "xls.h"
 
 #include "utils/logger.h"
+#include "utils/numutils.h"
 
 namespace nicer {
 
-static const std::set<std::string> required_field = {
-    "年级编号", "班级编号", "班级名称", "学籍号", "民族代码", "姓名", "性别", "出生日期", "家庭住址"
+static const std::set<std::string> required_fields = {
+    "年级编号", "班级编号", "班级名称", "学籍号", "民族代码", "姓名", "性别", "出生日期", "家庭住址",
 };
+
+static const std::set<std::string> optional_fields = {
+    "身高", "体重", "肺活量", "50米跑", "坐位体前屈", "一分钟跳绳", "一分钟仰卧起坐", "50米×8往返跑",
+    "引体向上", "400米跑", "立定跳远", "1000米跑", "800米跑", "左眼裸眼视力", "右眼裸眼视力",
+    "左眼串镜", "右眼串镜", "左眼屈光不正", "右眼屈光不正",
+}
+
+bool row_validate(
+        std::map<std::string, int32_t>& title_index,
+        std::vector<std::string>& row_data,
+        int32_t row_num,
+        std::vector<std::string>& err_msg) {
+    std::string msg;
+    for (auto &field_name : optional_fields) {
+        switch (field_name) {
+            case "身高":
+                float height = NumUtils::stof(row_data[title_index[field_name]]);
+                if(height < 80 || height > 250){
+                    msg = "第" + std::to_string(row_data + 1) + "行, 身高：数据有误，数据格式错误或者超出数据导入范围（80—250厘米）。";
+                    err_msg.emplace_back(msg);
+                }
+                break;
+            case "体重":
+                float weight = NumUtils::stof(row_data[title_index[field_name]]);
+                if(weight < 14 || weight > 200){
+                    msg = "第" + std::to_string(row_data + 1) + "行, 体重：数据有误，数据格式错误或者超出数据导入范围（14—200公斤）。";
+                    err_msg.emplace_back(msg);
+                }
+                break;
+            case "肺活量":
+                int32_t lung_capacity = NumUtils::stoi(row_data[title_index[field_name]]);
+                if (lung_capacity < 500 || lung_capacity > 9999) {
+                    msg = "第" + std::to_string(row_data + 1) + "行, 肺活量：数据有误，数据格式错误或者超出数据导入范围（500－9999毫升）。";
+                    err_msg.emplace_back(msg);
+                }
+                break;
+        }
+    }
+}
 
 void NicerService::check_excel_status(
                         ::google::protobuf::RpcController* controller,
@@ -48,6 +88,8 @@ void NicerService::check_excel_status(
             continue;
         }
 
+        INFLOG << "rows: " << rows_num << ", cols: " << cols_num;
+
         std::vector<std::string> titles;    // 标题数组
         std::map<std::string, int32_t> title_index;     // 标题与位置对应关系
         std::vector<std::vector<std::string>> datas;
@@ -77,17 +119,28 @@ void NicerService::check_excel_status(
                 continue;
             }
 
+            bool is_row_empty = true;
+            bool is_incomplete = false;
+
+            std::vector<std::string> row_data;
             for (int32_t k = 0; k < cols_num; k++) {
                 xls::xlsCell *cell = &row->cells.cell[k];
-                if (required_field.count(titles[k]) && cell->str == NULL) {
-                    msg = "第" + std::to_string(j + 1) + "行，学生信息填写不完整。";
-                    err_msg.emplace_back(msg);
+                if (required_fields.count(titles[k]) && cell->str == NULL) {
+                    is_incomplete = true;
                     break;
                 }
-                if (cell->str != NULL) {
-                    datas.emplace_back(cell->str);
-                }
-                
+                is_row_empty = false;
+                std::string col_data = cell->str == NULL ? "" : cell->str;
+                row_data.emplace_back(col_data);
+                row_validate(title_index, row_data, j, err_msg);
+            }
+
+            if (is_row_empty) {
+                break;
+            } else if (is_incomplete) {
+                msg = "第" + std::to_string(j + 1) + "行，学生信息填写不完整。";
+                err_msg.emplace_back(msg);
+                continue;
             }
         }
         xls::xls_close_WS(work_sheet);
