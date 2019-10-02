@@ -4,3 +4,4 @@ proto/*.o
 proto/*.h
 proto/*.cpp
 nicer
+core.*
