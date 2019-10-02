@@ -135,7 +135,6 @@ void NicerService::check_excel_status(
                 is_row_empty = false;
                 std::string col_data = cell->str == NULL ? "" : cell->str;
                 row_data.emplace_back(col_data);
-                row_validate(title_index, row_data, j, err_msg);
             }
 
             if (is_row_empty) {
@@ -145,6 +144,7 @@ void NicerService::check_excel_status(
                 err_msg.emplace_back(msg);
                 continue;
             }
+            row_validate(title_index, row_data, j, err_msg);
         }
         xls::xls_close_WS(work_sheet);
     }
