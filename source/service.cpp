@@ -79,7 +79,7 @@ void NicerService::check_excel_status(
 
             for (int32_t k = 0; k < cols_num; k++) {
                 xls::xlsCell *cell = &row->cells.cell[k];
-                if (required_field.count(titles[k]) && (cell->str == NULL || cell->str.empty())) {
+                if (required_field.count(titles[k]) && cell->str == NULL) {
                     msg = "第" + std::to_string(j + 1) + "行，学生信息填写不完整。";
                     err_msg.emplace_back(msg);
                     break;
