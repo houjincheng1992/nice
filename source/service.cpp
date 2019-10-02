@@ -4,8 +4,8 @@
 #include <set>
 #include <string>
 #include <vector>
+#include <boost/algorithm/string.hpp>
 #include <boost/algorithm/string/join.hpp>
-#include <boost/algorithm/string/split.hpp>
 
 #include <butil/time.h>
 #include "xls.h"
@@ -105,7 +105,7 @@ bool row_validate(
             }
 
             std::vector<std::string> split_vec;
-            boost::algorithm::split(split_vec, round_trip_50_8, boost::is_any_of("′’'"));
+            boost::split(split_vec, round_trip_50_8, boost::is_any_of("′’'"));
             if (split_vec.size() == 2) {
                 if (split_vec[1].size() != 2) {
                     msg = msg_format(row_num + 1, field_name, "0′45″—4′00″分·秒");
@@ -146,12 +146,12 @@ bool row_validate(
                 return false;
             }
             std::set<std::string> seperate = {"\"", "″", "”"};
-            if (seperate.count(round_trip_50_8[-1])) {
-                round_trip_50_8 = round_trip_50_8.substr(0, round_trip_50_8.size() - 1);
+            if (seperate.count(run_1km[-1])) {
+                run_1km = run_1km.substr(0, run_1km.size() - 1);
             }
 
             std::vector<std::string> split_vec;
-            boost::algorithm::split(split_vec, round_trip_50_8, boost::is_any_of("′’'"));
+            boost::algorithm::split(split_vec, run_1km, boost::is_any_of("′’'"));
             if (split_vec.size() == 2) {
                 if (split_vec[1].size() != 2) {
                     msg = msg_format(row_num + 1, field_name, "2′00″－9′00″分·秒");
