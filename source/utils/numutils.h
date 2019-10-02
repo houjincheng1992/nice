@@ -7,7 +7,7 @@ namespace utils {
 
 class NumUtils {
 public:
-	static float stof(std::string& str) noexcept {
+	static float stof(std::string& str) {
 		try {
 			float value = std::stof(str);
 			return value;
@@ -16,7 +16,7 @@ public:
 		}
 	}
 
-	static int32_t stoi(std::string& str) noexcept {
+	static int32_t stoi(std::string& str) {
 		try {
 			int32_t value = std::stoi(str);
 			return value;
