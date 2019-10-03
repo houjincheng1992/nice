@@ -1,5 +1,6 @@
 #include "service.h"
 
+#include <sstream>
 #include <limits>
 #include <set>
 #include <string>
@@ -11,6 +12,7 @@
 #include "xls.h"
 
 #include "utils/logger.h"
+#include "utils/multipart_parser.h"
 #include "utils/numutils.h"
 
 namespace nicer {
@@ -250,11 +252,18 @@ void NicerService::check_excel_status(
 
     std::string str = ctrl->request_attachment().to_string();
 
+    utils::StringDecoder decoder;
+    decoder.processString(str);
+    decoder.close();
+    INFLOG << "decoder dump: " << decoder.dump();
+
     xls::xls_error_t error = xls::LIBXLS_OK;
     xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)str.c_str(), str.size(), "UTF-8", &error);
     if (wb == NULL) {
-        printf("Error reading file: %s\n", xls_getError(error));
-        exit(1);
+        ERRLOG << "error reading file: " << xls_getError(error);
+        std::string response_str = "{\"msg\":\"done\"}";
+        ctrl->response_attachment().append(response_str);
+        return;
     }
 
     std::vector<std::string> err_msg;
