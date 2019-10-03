@@ -339,7 +339,7 @@ void NicerService::check_excel_status(
         break;
     }
     utils::multipart_parser parser;
-    parser.boundary = boundary.c_str;
+    parser.boundary = boundary.c_str();
     parser.boundary_len = boundary.size();
     utils::multipart_parser_init(&parser);
 
