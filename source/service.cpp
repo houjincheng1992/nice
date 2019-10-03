@@ -255,7 +255,7 @@ void NicerService::check_excel_status(
     std::string content_type = ctrl->http_request().content_type();
 
     size_t boundary_len;
-    const char* boundary = utils::get_boundary(content_type.c_str(), content_type.size(), boundary_len);
+    const char* boundary = utils::get_boundary(content_type.c_str(), content_type.size(), &boundary_len);
     utils::multipart_parser parser;
     parser.boundary = boundary;
     parser.boundary_len = boundary_len;
@@ -274,8 +274,9 @@ void NicerService::check_excel_status(
     utils::multipart_parser_execute(&parser, &parser_settings, str.c_str(), str.size());
 
     size_t len;
-    const char* file_content = multipart_callback.get_content("update_file", len);
-    std::string filename = multipart_callback.get_filename("update_file");
+    std::string file_field_name = "update_file";
+    const char* file_content = multipart_callback.get_content(file_field_name, len);
+    std::string filename = multipart_callback.get_filename(file_field_name);
 
     xls::xls_error_t error = xls::LIBXLS_OK;
     xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)file_content, len, "UTF-8", &error);
