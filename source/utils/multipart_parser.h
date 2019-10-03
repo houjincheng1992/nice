@@ -24,8 +24,11 @@
 
 #pragma once
 
+#include <map>
 #include <stddef.h>
 #include <stdint.h>
+#include <string>
+#include <utility>
 
 namespace nicer {
 namespace utils {
