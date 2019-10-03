@@ -254,14 +254,14 @@ void NicerService::check_excel_status(
     std::string content_type = ctrl->http_request().content_type();
     std::string content_type_str = "Content-Type: " + content_type;
 
-    vmime::shared_ptr <vmime::bodyPart> msg = vmime::make_shared <vmime::bodyPart>();
-    msg->parse(content_type_str);
-    msg->parse(str);
-    INFLOG << "check_excel_status, partcount: " << msg->getBody()->getPartCount();
+    vmime::shared_ptr <vmime::bodyPart> msg_vmime = vmime::make_shared <vmime::bodyPart>();
+    msg_vmime->parse(content_type_str);
+    msg_vmime->parse(str);
+    INFLOG << "check_excel_status, partcount: " << msg_vmime->getBody()->getPartCount();
 
 
     xls::xls_error_t error = xls::LIBXLS_OK;
-    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)str, str.size(), "UTF-8", &error);
+    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)str.c_str(), str.size(), "UTF-8", &error);
     if (wb == NULL) {
         ERRLOG << "error reading file: " << xls_getError(error);
         std::string response_str = "{\"msg\":\"done\"}";
