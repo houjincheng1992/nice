@@ -11,7 +11,6 @@
 #include <butil/time.h>
 #include "xls.h"
 
-#include "svc/callback.h"
 #include "utils/logger.h"
 #include "utils/multipart_parser.h"
 #include "utils/numutils.h"
