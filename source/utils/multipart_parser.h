@@ -64,6 +64,25 @@ struct multipart_parser {
 	const char* boundary;   /* set this to a boundary string taken from headers */
 	size_t boundary_len;
 
+    const char* get_content(std::string& field_name, size_t& len) {
+        if (_datas.count(field_name)) {
+            len = _datas[field_name].second;
+            return _datas[field_name].first;
+        }
+        return nullptr;
+    }
+
+    std::string get_filename(std::string& field_name) {
+        return _field_filename.count(field_name) ? _field_filename[field_name] : "";
+    }
+
+    // {field_name, {field_value_pointer, field_value_len}}
+    std::map<std::string, std::pair<const char*, size_t>> _datas;
+    std::map<std::string, std::string> _field_filename;
+    std::string _last_field_name;
+    std::string _last_header_name;
+    std::string _last_filename;
+
 };
 
 void multipart_parser_init(multipart_parser *parser);

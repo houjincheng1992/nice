@@ -28,6 +28,68 @@ static const std::vector<std::string> optional_fields = {
     "左眼串镜", "右眼串镜", "左眼屈光不正", "右眼屈光不正",
 };
 
+int32_t on_boundary_begin(utils::multipart_parser* parser) {
+    parser._last_field_name = "";
+    parser._last_header_name = "";
+    parser._last_filename = "";
+    return 0;
+}
+
+int32_t on_headers_complete(utils::multipart_parser* parser) {
+    return 0;
+}
+
+int32_t on_body_parts_complete(utils::multipart_parser* parser) {
+    return 0;
+}
+
+int32_t on_header_field(utils::multipart_parser* parser, const char *at, size_t length) {
+    if (parser == nullptr || at == nullptr) {
+        return -1;
+    }
+    std::string header_field = std::string(at, length);
+    if (header_field == "Content-Type" || header_field == "Content-Disposition") {
+        parser._last_field_name = header_field;
+    } else {
+        parser._last_field_name = "";
+        return -1;
+    }
+    return 0;
+}
+
+int32_t on_header_value(utils::multipart_parser* parser, const char *at, size_t length) {
+    if (parser == nullptr || at == nullptr) {
+        return -1;
+    }
+
+    size_t size;
+    if (parser._last_field_name == "Content-Disposition") {
+        const char* header_name = utils::multipart_get_name(at, length, &size);
+        if (header_name == nullptr) {
+            return -1;
+        }
+        parser._last_header_name = std::string(header_name, size);
+
+        const char* filename = utils::multipart_get_filename(at, length, &size);
+        if (filename == nullptr) {
+            return -1;
+        }
+        parser._last_filename = std::string(filename, size);
+    }
+    return 0;
+}
+
+int32_t on_body(utils::multipart_parser* parser, const char *at, size_t length) {
+    if (parser == nullptr || at == nullptr) {
+        return -1;
+    }
+    parser._datas.emplace(_last_header_name, std::make_pair(at, length));
+    if (!parser._last_filename.empty()) {
+        parser._field_filename.emplace(parser._last_header_name, parser._last_filename);
+    }
+    return 0;
+}
+
 std::string msg_format(int32_t row_num, const std::string& name, const std::string& standard) {
     return "第" + std::to_string(row_num) + "行, " + name + "：数据有误，数据格式错误或者超出数据导入范围（" + standard + "）。";
 }
@@ -265,18 +327,18 @@ void NicerService::check_excel_status(
     utils::multipart_parser_settings parser_settings;
     utils::multipart_parser_settings_init(&parser_settings);
 
-    parser_settings.on_boundary_begin = multipart_callback.on_boundary_begin;
-    parser_settings.on_headers_complete = multipart_callback.on_headers_complete;
-    parser_settings.on_body_parts_complete = multipart_callback.on_body_parts_complete;
-    parser_settings.on_header_field = multipart_callback.on_header_field;
-    parser_settings.on_header_value = multipart_callback.on_header_value;
-    parser_settings.on_body = multipart_callback.on_body;
+    parser_settings.on_boundary_begin = on_boundary_begin;
+    parser_settings.on_headers_complete = on_headers_complete;
+    parser_settings.on_body_parts_complete = on_body_parts_complete;
+    parser_settings.on_header_field = on_header_field;
+    parser_settings.on_header_value = on_header_value;
+    parser_settings.on_body = on_body;
     utils::multipart_parser_execute(&parser, &parser_settings, str.c_str(), str.size());
 
     size_t len;
     std::string file_field_name = "update_file";
-    const char* file_content = multipart_callback.get_content(file_field_name, len);
-    std::string filename = multipart_callback.get_filename(file_field_name);
+    const char* file_content = parser.get_content(file_field_name, len);
+    std::string filename = parser.get_filename(file_field_name);
 
     xls::xls_error_t error = xls::LIBXLS_OK;
     xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)file_content, len, "UTF-8", &error);
