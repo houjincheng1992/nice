@@ -28,9 +28,9 @@ static const std::vector<std::string> optional_fields = {
 };
 
 int32_t on_boundary_begin(utils::multipart_parser* parser) {
-    parser._last_field_name = "";
-    parser._last_header_name = "";
-    parser._last_filename = "";
+    parser->_last_field_name = "";
+    parser->_last_header_name = "";
+    parser->_last_filename = "";
     return 0;
 }
 
@@ -48,9 +48,9 @@ int32_t on_header_field(utils::multipart_parser* parser, const char *at, size_t 
     }
     std::string header_field = std::string(at, length);
     if (header_field == "Content-Type" || header_field == "Content-Disposition") {
-        parser._last_field_name = header_field;
+        parser->_last_field_name = header_field;
     } else {
-        parser._last_field_name = "";
+        parser->_last_field_name = "";
         return -1;
     }
     return 0;
@@ -62,18 +62,18 @@ int32_t on_header_value(utils::multipart_parser* parser, const char *at, size_t 
     }
 
     size_t size;
-    if (parser._last_field_name == "Content-Disposition") {
+    if (parser->_last_field_name == "Content-Disposition") {
         const char* header_name = utils::multipart_get_name(at, length, &size);
         if (header_name == nullptr) {
             return -1;
         }
-        parser._last_header_name = std::string(header_name, size);
+        parser->_last_header_name = std::string(header_name, size);
 
         const char* filename = utils::multipart_get_filename(at, length, &size);
         if (filename == nullptr) {
             return -1;
         }
-        parser._last_filename = std::string(filename, size);
+        parser->_last_filename = std::string(filename, size);
     }
     return 0;
 }
@@ -82,9 +82,9 @@ int32_t on_body(utils::multipart_parser* parser, const char *at, size_t length) 
     if (parser == nullptr || at == nullptr) {
         return -1;
     }
-    parser._datas.emplace(_last_header_name, std::make_pair(at, length));
-    if (!parser._last_filename.empty()) {
-        parser._field_filename.emplace(parser._last_header_name, parser._last_filename);
+    parser->_datas.emplace(_last_header_name, std::make_pair(at, length));
+    if (!parser->_last_filename.empty()) {
+        parser->_field_filename.emplace(parser->_last_header_name, parser->_last_filename);
     }
     return 0;
 }
@@ -322,7 +322,6 @@ void NicerService::check_excel_status(
     parser.boundary_len = boundary_len;
     utils::multipart_parser_init(&parser);
 
-    svc::MultipartCallBack multipart_callback;
     utils::multipart_parser_settings parser_settings;
     utils::multipart_parser_settings_init(&parser_settings);
 
