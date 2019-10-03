@@ -19,6 +19,7 @@ HDRS+=./thirdparty/rapidjson/include
 
 HDRS+=/usr/local/include
 LIBS+=/usr/local/lib
+LIBS+=/usr/local/lib64
 
 HDRS+=./source
 
@@ -48,6 +49,7 @@ else ifeq ($(SYSTEM),Linux)
 	STATIC_LINKINGS += -lbrpc
 	STATIC_LINKINGS += -llua
 	DYNAMIC_LINKINGS += -lxlsreader
+	DYNAMIC_LINKINGS += -lvmime
 	LINK_OPTIONS_SO = -Xlinker "-(" $^ -Xlinker "-)" $(STATIC_LINKINGS) $(DYNAMIC_LINKINGS)
 	LINK_OPTIONS = -Xlinker "-(" $^ -Wl,-Bstatic $(STATIC_LINKINGS) -Wl,-Bdynamic -Xlinker "-)" $(DYNAMIC_LINKINGS)
 endif

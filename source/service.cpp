@@ -9,10 +9,10 @@
 #include <boost/algorithm/string/join.hpp>
 
 #include <butil/time.h>
+#include "vmime/vmime.hpp"
 #include "xls.h"
 
 #include "utils/logger.h"
-#include "utils/multipart_parser.h"
 #include "utils/numutils.h"
 
 namespace nicer {
@@ -26,80 +26,6 @@ static const std::vector<std::string> optional_fields = {
     "引体向上", "400米跑", "立定跳远", "1000米跑", "800米跑", "左眼裸眼视力", "右眼裸眼视力",
     "左眼串镜", "右眼串镜", "左眼屈光不正", "右眼屈光不正",
 };
-
-int32_t on_boundary_begin(utils::multipart_parser* parser) {
-    parser->_last_field_name = "";
-    parser->_last_header_name = "";
-    parser->_last_filename = "";
-    return 0;
-}
-
-int32_t on_headers_complete(utils::multipart_parser* parser) {
-    return 0;
-}
-
-int32_t on_body_parts_complete(utils::multipart_parser* parser) {
-    return 0;
-}
-
-int32_t on_header_field(utils::multipart_parser* parser, const char *at, size_t length) {
-    if (parser == nullptr || at == nullptr) {
-        return -1;
-    }
-    std::string header_field = std::string(at, length);
-    if (header_field == "Content-Type" || header_field == "Content-Disposition") {
-        parser->_last_field_name = header_field;
-    } else {
-        parser->_last_field_name = "";
-        return -1;
-    }
-    return 0;
-}
-
-int32_t on_header_value(utils::multipart_parser* parser, const char *at, size_t length) {
-    if (parser == nullptr || at == nullptr) {
-        return -1;
-    }
-
-    size_t size;
-    if (parser->_last_field_name == "Content-Disposition") {
-        const char* header_name = utils::multipart_get_name(at, length, &size);
-        if (header_name == nullptr) {
-            return -1;
-        }
-        parser->_last_header_name = std::string(header_name, size);
-
-        const char* filename = utils::multipart_get_filename(at, length, &size);
-        if (filename == nullptr) {
-            return -1;
-        }
-        parser->_last_filename = std::string(filename, size);
-    }
-    return 0;
-}
-
-int32_t on_body(utils::multipart_parser* parser, const char *at, size_t length) {
-    if (parser == nullptr || at == nullptr) {
-        return -1;
-    }
-    parser->_datas.emplace(parser->_last_header_name, std::make_pair(at, length));
-    if (!parser->_last_filename.empty()) {
-        parser->_field_filename.emplace(parser->_last_header_name, parser->_last_filename);
-    }
-    return 0;
-}
-
-const char* get_content(utils::multipart_parser* parser, std::string& field_name, size_t& len) {
-    if (parser->_datas.count(field_name)) {
-        len = parser->_datas[field_name].second;
-        return parser->_datas[field_name].first;
-    }
-    return nullptr;
-}
-
-std::string get_filename(utils::multipart_parser* parser, std::string& field_name) {
-    return parser->_field_filename.count(field_name) ? parser->_field_filename[field_name] : "";
-}
 
 std::string msg_format(int32_t row_num, const std::string& name, const std::string& standard) {
     return "第" + std::to_string(row_num) + "行, " + name + "：数据有误，数据格式错误或者超出数据导入范围（" + standard + "）。";
@@ -326,38 +252,13 @@ void NicerService::check_excel_status(
 
     std::string str = ctrl->request_attachment().to_string();
     std::string content_type = ctrl->http_request().content_type();
+    std::string content_type_str = "Content-Type: " + content_type;
 
-    std::vector<std::string> content_type_vec;
-    boost::split(content_type_vec, content_type, boost::is_any_of(";"));
-    std::string boundary;
-    for (auto &content_type_split : content_type_vec) {
-        size_t pos = content_type_split.find("boundary=");
-        if (pos == std::string::npos) {
-            continue;
-        }
-        boundary = content_type_split.substr(pos + 9);
-        break;
-    }
-    utils::multipart_parser parser;
-    parser.boundary = boundary.c_str();
-    parser.boundary_len = boundary.size();
-    utils::multipart_parser_init(&parser);
+    vmime::shared_ptr <vmime::bodyPart> msg = vmime::make_shared <vmime::bodyPart>();
+    msg.parse(content_type_str);
+    msg.parse(str);
+    INFLOG << "check_excel_status, partcount: " << msg.getBody()->getPartCount();
 
-    utils::multipart_parser_settings parser_settings;
-    utils::multipart_parser_settings_init(&parser_settings);
-
-    parser_settings.on_boundary_begin = on_boundary_begin;
-    parser_settings.on_headers_complete = on_headers_complete;
-    parser_settings.on_body_parts_complete = on_body_parts_complete;
-    parser_settings.on_header_field = on_header_field;
-    parser_settings.on_header_value = on_header_value;
-    parser_settings.on_body = on_body;
-    utils::multipart_parser_execute(&parser, &parser_settings, str.c_str(), str.size());
-
-    size_t len;
-    std::string file_field_name = "update_file";
-    const char* file_content = get_content(&parser, file_field_name, len);
-    std::string filename = get_filename(&parser, file_field_name);
 
     xls::xls_error_t error = xls::LIBXLS_OK;
     xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)file_content, len, "UTF-8", &error);
