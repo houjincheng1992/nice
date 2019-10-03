@@ -11,6 +11,7 @@
 #include <butil/time.h>
 #include "xls.h"
 
+#include "utils/callback.h"
 #include "utils/logger.h"
 #include "utils/multipart_parser.h"
 #include "utils/numutils.h"
@@ -251,16 +252,33 @@ void NicerService::check_excel_status(
     brpc::Controller* ctrl = static_cast<brpc::Controller*>(controller);
 
     std::string str = ctrl->request_attachment().to_string();
+    std::string content_type = ctrl->http_request().content_type();
 
-    utils::StringDecoder decoder;
-    const std::string* boundary = ctrl->http_request().GetHeader("Content-Type");
-    decoder.processString(*boundary);
-    decoder.processString(str);
-    decoder.close();
-    INFLOG << "decoder dump: " << decoder.dump();
+    size_t boundary_len;
+    const char* boundary = utils::get_boundary(content_type.c_str(), content_type.size(), boundary_len);
+    utils::multipart_parser parser;
+    parser.boundary = boundary;
+    parser.boundary_len = boundary_len;
+    utils::multipart_parser_init(&parser);
+
+    utils::MultipartCallBack multipart_callback;
+    utils::multipart_parser_settings parser_settings;
+    utils::multipart_parser_settings_init(&parser_settings);
+
+    parser_settings.on_boundary_begin = multipart_callback.on_boundary_begin;
+    parser_settings.on_headers_complete = multipart_callback.on_headers_complete
+    parser_settings.on_body_parts_complete = multipart_callback.on_body_parts_complete;
+    parser_settings.on_header_field = multipart_callback.on_header_field;
+    parser_settings.on_header_value = multipart_callback.on_header_value;
+    parser_settings.on_body = multipart_callback.on_body;
+    utils::multipart_parser_execute(&parser, &parser_settings, str.c_str(), str.size());
+
+    size_t len;
+    const char* file_content = multipart_callback.get_content("update_file", len);
+    std::string filename = multipart_callback.get_filename("update_file");
 
     xls::xls_error_t error = xls::LIBXLS_OK;
-    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)str.c_str(), str.size(), "UTF-8", &error);
+    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)file_content, len, "UTF-8", &error);
     if (wb == NULL) {
         ERRLOG << "error reading file: " << xls_getError(error);
         std::string response_str = "{\"msg\":\"done\"}";

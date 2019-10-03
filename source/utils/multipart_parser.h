@@ -1,270 +1,110 @@
+/**
+ *  Copyright (c) 2019 Trevor Herselman. All rights reserved.
+ *
+ *  MIT License
+ *
+ *  Permission is hereby granted, free of charge, to any person obtaining a copy
+ *  of this software and associated documentation files (the "Software"), to deal
+ *  in the Software without restriction, including without limitation the rights
+ *  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *  copies of the Software, and to permit persons to whom the Software is
+ *  furnished to do so, subject to the following conditions:
+ *
+ *  The above copyright notice and this permission notice shall be included in all
+ *  copies or substantial portions of the Software.
+ *
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *  SOFTWARE.
+ */
+
 #pragma once
 
-#include <exception>
-#include <map>
-#include <stdexcept>
-#include <string>
+#include <stddef.h>
+#include <stdint.h>
 
 namespace nicer {
-namespace  utils {
+namespace utils {
 
-class error : public std::logic_error {
-public:
-	error(const std::string &msg) : std::logic_error(msg) {}
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef struct multipart_parser multipart_parser;
+typedef struct multipart_parser_settings multipart_parser_settings;
+
+/* Callbacks should return non-zero to indicate an error. The parser will
+ * then halt execution.
+ */
+typedef int (*multipart_data_cb) (multipart_parser*, const char *at, size_t length);
+typedef int (*multipart_cb) (multipart_parser*);
+
+struct multipart_parser_settings {
+	multipart_cb      on_boundary_begin;
+	multipart_data_cb on_header_field;
+	multipart_data_cb on_header_value;
+	multipart_cb      on_headers_complete;
+	multipart_data_cb on_body;
+	multipart_cb      on_body_parts_complete;
+	multipart_data_cb on_debug;
 };
 
-class end_of_header : public std::logic_error {
-public:
-	end_of_header(const std::string &msg) : std::logic_error(msg) {}
+struct multipart_parser {
+	/** PRIVATE **/
+	unsigned char state;                       /* enum state from http_parser.c */
+
+	uint64_t nread;                        /* # bytes read in various scenarios */
+
+	/** READ-ONLY **/
+	unsigned char multipart_errno;
+
+	/** PUBLIC **/
+	void *data; /* A pointer to get hook to the "connection" or "socket" object */
+
+	const char* boundary;   /* set this to a boundary string taken from headers */
+	size_t boundary_len;
 };
+
+void multipart_parser_init(multipart_parser *parser);
+
+/* Initialize multipart_parser_settings members to 0
+ */
+void multipart_parser_settings_init(multipart_parser_settings *settings);
+
+/* `return -1` on error
+ * Sets `parser->multipart_errno` on error.
+ */
+int multipart_parser_execute(multipart_parser *parser,
+                             const multipart_parser_settings *settings,
+                             const char *data,
+                             size_t len);
+
+/* Helper method to get the boundary string from Content-Type header */
+const char* get_boundary(const char* str, size_t str_len, size_t* boundary_len);
 
 /**
- * Describes a MIME object header field.
  */
-// TODO: this could probably be struct.
-class HeaderField {
-public:
-	/** 
-	 * The field key e.g. "content-type". Note that the key is converted to lower case.
-	 */
-	std::string key;
-
-	/**
-	 * The field value.
-	 */
-	std::string value;
-
-	/**
-	 * The attributes associated with the field.  This is a map from key to value.
-	 */
-	std::map<std::string, std::string> attributes;
-};
+const char* multipart_get_name(const char* str, size_t len, size_t* value_len);
 
 /**
- * This object describes a MIME object but does not contain the data.
+ * Helper function to get the `filename` value from a header string value
+ * eg. `form-data; name="file1"; filename="我a私aaaa\"xxx\"abc"`
+ * returns: `我a私aaaa"xxx"abc`
+ * Extracts and decodes the `filename` string into buffer,
+ *   performs URL decoding, and slash string decoding!
+ * Firefox will encode a double quote `"` character into \"
+ * Chrome will use %22
  */
-// TODO: this probably could be just a struct.
-class Object {
-public:
-	/**
-	   The default constructor.
-	*/
-	Object() {
-		parent = 0;
-	}
+const char* multipart_get_filename(const char* str, size_t len,
+                                   size_t* value_len);
 
-	/**
-	   The object's major type, derived from the MIME type
-	   e.g. "text"
-	*/
-	std::string type;
-
-	/**
-	   The object's minor type, derived from the MIME type
-	   e.g. "plain"
-	*/
-	std::string subtype;
-
-	/**
-	   All fields from the object's header
-	*/
-	std::map<std::string, HeaderField> fields;
-
-	/**
-	   Pointer to the parent object, if one exists.
-	*/
-	Object *parent;
-};
-
-/**
- * Interface describes the events called as a MIME string is parsed.
- * To make the MIME decoder to do something useful, implement all these methods.
- */
-class ClientInterface {
-public:
-	/**
-	 * A MIME object has been discovered in the input data.  Data may or may not follow.
-	 */
-	virtual void object_created(Object * object) = 0;
-
-	/**
-	 * A MIME object's data starts processing.
-	 */
-	virtual void data_start(Object * obj) = 0;
-
-	/**
-	 * Deliver data parsed from the MIME object.
-	 */
-	virtual void data(Object * obj, unsigned char *data, int len) = 0;
-
-	/**
-	 * All data from the MIME object has been delivered.
-	 */
-	virtual void data_end(Object * obj) = 0;
-};
-
-class Parser {
-public:
-	Parser() {}
-	virtual ~Parser() {}
-
-	virtual void parse(unsigned char c) = 0;
-	virtual void close() {}
-};
-
-class ObjectParser : public Parser {
-public:
-	ObjectParser(ClientInterface *client, Object *obj);
-
-	ClientInterface *client;
-	Object *obj;
-};
-
-/**
- * Locates and extracts MIME headers, and stores their field keynames and values.
- * TODO Could this have less stuff?
- */
-class HeaderParser : public Parser {
-private:
-	Object *obj;
-
-	std::string key;
-	std::string value;
-	// std::string attrkey;
-	// std::string attrval;
-
-	// Fairly complex set of states for header parsing:
-	// PREKEY - Looking out for key.
-	// KEY - Gathering key.
-	// PREVAL - Looking out for a value.
-	// VAL - reading value.
-	// QTVAL - reading a quoted value.
-	// PREATTRKEY - looking out for an attribute key.
-	// ATTRKEY - reading an attribute key.
-	// ATTRVAL - reading an attribute value.
-	// QTATTRVAL - reading a quoted attribute value.
-	// EOL - read an end-of-line.
-	enum {
-		KEY, VAL, ATTRKEY, ATTRVAL, PREKEY, PREVAL, POSTVAL, EOL, QTVAL, CR
-	} state;
-
-	std::map<std::string, std::string> attributes;
-
-	void add_header(const std::string &key, const std::string &value);
-
-	void parse_attrs(HeaderField &fld);
-
-	void split(std::string &input, std::string &left, std::string &right, unsigned char spl);
-
-public:
-	HeaderParser(Object *obj);
-
-	virtual void parse(unsigned char c);
-};
-
-class AnyObjectParser : public ObjectParser {
-private:
-	Parser *p;
-	
-	enum {
-		HEADER, HEADER_COMPLETE, BODY
-	} state;
-
-public:
-	AnyObjectParser(ClientInterface *client, Object *obj);
-
-	virtual void	parse(unsigned char c);
-	void			close();
-};
-
-
-class ObjectBodyParser : public ObjectParser {
-public:
-	ObjectBodyParser(ClientInterface *client, Object *obj) : ObjectParser(client, obj) {
-		// constructor does nothing other than initialize ObjectParser.
-	}
-};
-
-class MultipartParser : public ObjectBodyParser {
-private:
-	Parser *sub_parser;
-	Object *sub_obj;
-
-	// States:
-	// PRE - Searching for first boundary.
-	// ATBOUND - Just matched the whole boundary string.
-	// FOLLBOUND - Looking at characters after boundary.
-	// INSIDE - Processing stuff between boundaries.
-	// STARTOBJECT - Starting a MIME object.
-	enum {
-		PRE, ATBOUND, FOLLBOUND, INSIDE, DONE, STARTOBJECT
-	} state;
-
-	std::string boundary;
-	std::string buffer;
-	size_t posn;
-
-public:
-	MultipartParser(ClientInterface *client, Object *obj);
-
-	virtual void parse(unsigned char c);
-
-	void close();
-};
-
-class ParserFactory {
-public:
-	static Parser *generic(ClientInterface *client, Object *obj);
-
-	static Parser *create(ClientInterface *client, Object *obj);
-};
-
-/**
- * A class which knows how to decode MIME.
- * To do something useful, derive a class from it, and implement
- * all the calls in the ClientInterface interface.
- */
-class Decoder : public ClientInterface {
-private:
-	Parser *		parser;
-	Object *		obj;
-public:
- 	Decoder();
-	virtual ~Decoder() {};
-
-	/**
-	 * The data producer should call this once all data has been presented
-	 * to the decoder to finalise processing and clean up all resources.
-	 */
-	void close();
-
-	/**
-	 * The data produced should call this method to present data to the
-	 * decoder.
-	 */
-	void decode(unsigned char c);
-};
-
-class StringDecoder : public Decoder {
-public:
-	StringDecoder() {}
-	~StringDecoder() {}
-
-	void			processString(std::string input);
-	std::string		getFormValue(std::string formName);
-	std::string		dump();
-
-protected:
-	std::string			part;
-
-	std::map<std::string, std::string>	results;
-
-	virtual void object_created(Object *object);
-	virtual void data_start(Object *obj);
-	virtual void data(Object *obj, unsigned char *data, int len);
-	virtual void data_end(Object *obj);
-};
-
+#ifdef __cplusplus
+}
+#endif
 
 }	// namespace utils
 }	// namespace nicer

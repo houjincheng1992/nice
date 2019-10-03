@@ -1,505 +1,610 @@
+/**
+ *  Copyright (c) 2019 Trevor Herselman. All rights reserved.
+ *
+ *  MIT License
+ *
+ *  Permission is hereby granted, free of charge, to any person obtaining a copy
+ *  of this software and associated documentation files (the "Software"), to deal
+ *  in the Software without restriction, including without limitation the rights
+ *  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ *  copies of the Software, and to permit persons to whom the Software is
+ *  furnished to do so, subject to the following conditions:
+ *
+ *  The above copyright notice and this permission notice shall be included in all
+ *  copies or substantial portions of the Software.
+ *
+ *  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ *  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ *  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ *  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ *  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ *  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ *  SOFTWARE.
+ */
+
 #include "multipart_parser.h"
+#include <assert.h>
+#include <stddef.h>
+#include <ctype.h>
+#include <string.h>
+#include <limits.h>
+
+#include <stdio.h>
 
 namespace nicer {
 namespace utils {
 
-/**
-* Implmentation of class HeaderParser.
-*
-* Locates and extracts MIME headers, and stores their field keynames and values.
-*/
+#ifndef MIN
+# define MIN(a,b) ((a) < (b) ? (a) : (b))
+#endif
 
-HeaderParser::HeaderParser(Object *obj) {
-    this->obj = obj;
-    state = PREKEY;
+#define SET_ERRNO(e)                                                 \
+do {                                                                 \
+  parser->multipart_errno = (e);                                     \
+} while(0)
+
+#ifdef __GNUC__
+# define LIKELY(X) __builtin_expect(!!(X), 1)
+# define UNLIKELY(X) __builtin_expect(!!(X), 0)
+#else
+# define LIKELY(X) (X)
+# define UNLIKELY(X) (X)
+#endif
+
+#ifndef UNREACHABLE
+# ifdef _MSC_VER
+#  define UNREACHABLE __assume(0)
+# else  /* GCC, Clang & Intel C++ */
+#  define UNREACHABLE __builtin_unreachable()
+# endif
+#endif
+
+#ifndef FALLTHROUGH
+# if defined(__GNUC__) || defined(__clang__)
+#  define FALLTHROUGH __attribute__((fallthrough))
+# else
+#  define FALLTHROUGH ((void)0)
+# endif
+#endif
+
+
+enum state
+  { s_start
+  , s_start_dash
+  , s_boundary
+  , s_boundary_cr
+  , s_boundary_almost_done
+  , s_header_field_start
+  , s_header_field
+  , s_header_value_discard_ws
+  , s_header_value
+  , s_header_value_lws
+  , s_header_almost_done
+
+  , s_headers_almost_done
+  , s_headers_done
+
+  , s_body_part_start
+  , s_body_part
+
+  , s_body_part_boundary
+  , s_body_part_boundary_dash
+  , s_body_part_boundary_dash_dash
+  , s_body_part_boundary_compare
+  };
+
+/* Macros for character classes */
+#define CR                  '\r'
+#define LF                  '\n'
+#define LOWER(c)            (unsigned char)(c | 0x20)
+#define IS_ALPHA(c)         (LOWER(c) >= 'a' && LOWER(c) <= 'z')
+#define IS_NUM(c)           ((c) >= '0' && (c) <= '9')
+#define IS_ALPHANUM(c)      (IS_ALPHA(c) || IS_NUM(c))
+#define IS_HEX(c)           (IS_NUM(c) || (LOWER(c) >= 'a' && LOWER(c) <= 'f'))
+
+
+void multipart_parser_init(multipart_parser *parser)
+{
+    parser->state = s_start;
 }
 
-/**
-* @param string input -- string to split.
-* @param string left -- output left half of string after split.
-* @param string right -- output right half of string after split.
-* @param char spl -- split on this character, include in left half output.
-*/
-void HeaderParser::split(std::string &input, std::string &left, std::string &right, unsigned char spl) {
-    int pos = input.find(spl);
-
-    if (pos >= 0) {
-        right = input.substr(pos + 1);
-        left = input.substr(0, pos);
-    } else {
-        left = input;
-        right = "";
-    }
+void multipart_parser_settings_init(multipart_parser_settings *settings)
+{
+    memset(settings, 0, sizeof(*settings));
 }
 
+int multipart_parser_execute(multipart_parser *parser,
+                             const multipart_parser_settings *settings,
+                             const char *data,
+                             size_t len)
+{
+  const char* buf_end = &data[len];
+  const char* p = data;
 
-void HeaderParser::parse_attrs(HeaderField &fld) {
-    std::string a, b;
+  const char* body_start;
+  const char* body_end;
 
-    while (*(fld.key.begin()) == ' ')
-        fld.key = fld.key.substr(1);
-    while (fld.key[fld.key.size() - 1] == ' ')
-        fld.key.erase(fld.key.end() - 1);
+  char buf[100];
 
-    while (*(fld.value.begin()) == ' ')
-        fld.value = fld.value.substr(1);
-    while (fld.value[fld.value.size() - 1] == ' ')
-        fld.value.erase(fld.value.end() - 1);
+  for (; p < buf_end; ++p)
+  {
+    const char ch = *p;
 
-    split(fld.value, a, b, ';');
-
-    fld.value = a;
-
-    a = b;
-
-    while (a != "") {
-        std::string c, d;
-
-        split(a, a, b, ';');
-
-        split(a, c, d, '=');
-
-        while (*(c.begin()) == ' ')
-            c = c.substr(1);
-        while (c[c.size() - 1] == ' ')
-            c.erase(c.end() - 1);
-
-        while (*(d.begin()) == ' ')
-            d = d.substr(1);
-        while (d[d.size() - 1] == ' ')
-            d.erase(d.end() - 1);
-
-        while (*(d.begin()) == '"')
-            d = d.substr(1);
-        while (d[d.size() - 1] == '"')
-            d.erase(d.end() - 1);
-
-        fld.attributes[c] = d;
-
-        a = b;
-    }
-}
-
-void HeaderParser::add_header(const std::string &key, const std::string &value) {
-    HeaderField fld;
-
-    fld.key = key;
-    fld.value = value;
-
-    if (key == "content-type")
-        parse_attrs(fld);
-
-    // CLx
-    if (key == "content-disposition")
-        parse_attrs(fld);
-
-    obj->fields[key] = fld;
-}
-
-
-void HeaderParser::parse(unsigned char c) {
-    switch (state) {
-        case CR:
-            if (c == '\n') {
-                state = EOL;
-                return;
-            }
-            throw error("CR without LF in MIME header?");
-
-        case EOL:
-
-            // This deals with continuation.
-            if (c == ' ' || c == '\t') {
-                state = VAL;
-                return;
-            }
-
-            // Not a continue, save key/value if there is one.
-            if (key != "") {
-                add_header(key, value);
-            }
-
-            if (c == '\r') return;
-
-            if (c == '\n') {
-
-                if (obj->fields.find("content-type") != obj->fields.end()) {
-                    std::string ct = obj->fields["content-type"].value;
-                    if (std::string::npos != ct.find('/')) {
-                        obj->type = ct.substr(0, ct.find('/'));
-                        obj->subtype = ct.substr(ct.find('/') + 1);
-                    }
-                }
-
-                throw end_of_header("EOH");
-            }
-
-            // EOL, now reading a key.
-
-            state = KEY;
-            key = tolower(c);
-            return;
-
-        case PREKEY:
-            if (c == ' ' || c == '\t') return;
-            if (c == ':') throw error("Zero length key?");
-            state = KEY;
-            key = tolower(c);
-            return;
-
-        case KEY:
-            if (c == ' ' || c == '\t') return;
-            if (c == ':') {
-                state = PREVAL;
-                return;
-            }
-            key += tolower(c);
-            return;
-
-        case PREVAL:
-            if (c == ' ' || c == '\t') return;
-            if (c == '\r') {
-                state = CR;
-                return;
-            }
-            if (c == '\n') {
-                state = EOL;
-                return;
-            }
-            value = c;
-            state = VAL;
-            return;
-
-        case VAL:
-            if (c == '\r') {
-                state = CR;
-                return;
-            }
-            if (c == '\n') {
-                state = EOL;
-                return;
-            }
-
-            value += c;
-            return;
-
-        case ATTRKEY:
-        case ATTRVAL:
-        case POSTVAL:
-        case QTVAL:
-            // TODO: NOT IMPLEMENTED, do we throw or just return?
-            // throw error("Unimplemented header feature");
-
-            return;
-    }
-}
-
-// Constructor
-AnyObjectParser::AnyObjectParser(ClientInterface *client, Object *obj) : ObjectParser(client, obj) {
-    p = new HeaderParser(obj);
-    state = HEADER;
-}
-
-void AnyObjectParser::parse(unsigned char c) {
-    if (state == HEADER_COMPLETE) {
-        delete p;
-
-        state = BODY;
-        client->object_created(obj);
-
-        // Use the parser factory to get an appropriate parser.
-        p = ParserFactory::create(client, obj);
-    }
-
-    try {
-        p->parse(c);
-    } catch (end_of_header &e) {
-        state = HEADER_COMPLETE;
-    }
-}
-
-void AnyObjectParser::close() {
-    if (p) {
-        p->close();
-        delete p;
-    }
-}
-
-ObjectParser::ObjectParser(ClientInterface *client, Object *obj) {
-    this->client = client;
-    this->obj = obj;
-}
-
-// Constructor
-MultipartParser::MultipartParser(ClientInterface *client, Object *obj) : ObjectBodyParser(client, obj) {
-    state = PRE;
-    posn = 0;
-    boundary = "--" + obj->fields["content-type"].attributes["boundary"];
-    sub_obj = 0;
-    sub_parser = 0;
-}
-
-
-void MultipartParser::parse(unsigned char c) {
-    if (state == ATBOUND) {
-        if (c == '-') {
-            state = FOLLBOUND;
-            return;
+    switch (parser->state)
+    {
+      case s_start:
+        if (LIKELY(ch == '-')) {
+          parser->state = s_start_dash;
         }
-        if (c == '\r') {
-            state = FOLLBOUND;
-            return;
+        continue;
+
+      case s_start_dash:
+        if (LIKELY(ch == '-')) {
+          parser->nread = 0;
+          parser->state = s_boundary;
+          continue;
         }
-        if (c == '\n') {
-            state = STARTOBJECT;
-            return;
-        }
-        throw error("MIME duff boundary stuff");
-    }
+        return -1;
 
-    if (state == FOLLBOUND) {
-        if (c == '-') {
-            state = DONE;
-            return;
-        }
-        if (c == '\n') {
-            state = STARTOBJECT;
-            return;
-        }
-        throw error("MIME duff boundary stuff");
-    }
-
-    if (state == PRE) {
-
-        if (c == boundary[posn])
-            posn++;
-        else {
-            if (c == boundary[0])
-                posn = 1;
-            else
-                posn = 0;
-        }
-
-        if (posn == boundary.size()) {
-            state = ATBOUND;
-            posn = 0;
-            return;
-        }
-
-        return;
-    }
-
-    if (state == STARTOBJECT) {
-
-        if (sub_parser) {
-            sub_parser->close();
-            delete sub_parser;
-        }
-
-        if (sub_obj) {
-            delete sub_obj;
-            sub_obj = 0;
-        }
-
-        sub_obj = new Object();
-        sub_obj->parent = ObjectParser::obj;
-
-        sub_parser = ParserFactory::generic(ObjectParser::client, sub_obj);
-
-        state = INSIDE;
-
-        sub_parser->parse(c);
-
-        posn = 0;
-        buffer = "";
-
-        return;
-    }
-
-    if (state == INSIDE) {
-        if (c == boundary[posn]) {
-            posn++;
-            buffer += c;
+      case s_boundary:
+        if (LIKELY(parser->nread < parser->boundary_len)) {
+          if (LIKELY(ch == parser->boundary[parser->nread++])) {
+            continue;
+          }
         } else {
-            // Dispose of buffer
-            if (posn) {
-                for (size_t i = 0; i < buffer.size(); i++)
-                    sub_parser->parse(buffer[i]);
-                buffer = "";
-                posn = 0;
-            }
+          if (LIKELY(ch == '\r')) {
+            parser->state = s_boundary_cr;
+            continue;
+          } else if (ch == '-') {
+            parser->state = s_boundary_almost_done;
+            continue;
+          }
+        }
+        return -1;
 
-            // This character may start the match again.
-            if (c == boundary[0]) {
-                posn = 1;
-                buffer += c;
-            } else {
-                posn = 0;
-                sub_parser->parse(c);
-            }
+      case s_boundary_cr:
+        if (LIKELY(ch == '\n')) {
+          if (LIKELY(settings->on_boundary_begin(parser) == 0)) {
+            parser->state = s_header_field_start;
+            continue;
+          }
+        }
+        return -1;
+
+      case s_boundary_almost_done:
+        if (LIKELY(ch == '-')) {
+          return settings->on_body_parts_complete(parser);
+        }
+        return -1;
+
+      case s_headers_almost_done:
+        if (ch == '\r') {
+          parser->state = s_headers_done;
+          continue;
+        }
+        FALLTHROUGH;
+
+      case s_header_field_start:
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) {
+          parser->nread = 1;
+          parser->state = s_header_field;
+          continue;
+        }
+        return -1;
+
+      case s_header_field:
+        if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z') || ch == '-') {
+          parser->nread++;
+          continue;
+        } else if (ch == ':') {
+          if (settings->on_header_field(
+                parser,
+                p - parser->nread,
+                parser->nread ) == 0) {
+            parser->state = s_header_value_discard_ws;
+            continue;
+          }
+        }
+        return -1;
+
+      case s_header_value_discard_ws:
+        if (ch > ' ') {
+          parser->nread = 1;
+          parser->state = s_header_value;
+          continue;
+        } if (ch == ' ') {
+          continue;
+        }
+        return -1;
+
+      case s_header_value:
+        if (ch != '\r') {
+          parser->nread++;
+          continue;
+        }
+        if (settings->on_header_value(
+              parser,
+              p - parser->nread,
+              parser->nread) == 0) {
+          parser->state = s_header_almost_done;
+          continue;
+        }
+        return -1;
+
+      case s_header_almost_done:
+        if (ch == '\n') {
+          parser->state = s_headers_almost_done;
+          continue;
         }
 
-        if (posn == boundary.size()) {
-            state = ATBOUND;
-            posn = 0;
-            return;
+      case s_header_value_lws:
+        return -1;
+
+      case s_headers_done:
+        if (ch == '\n') {
+          if (LIKELY( settings->on_headers_complete(parser) == 0)) {
+            parser->state = s_body_part_start;
+            continue;
+          }
+        }
+        return -1;
+
+      case s_body_part_start:
+        body_start = p;
+        parser->state = s_body_part;
+        FALLTHROUGH;
+
+      case s_body_part:
+        if (LIKELY(ch != '\r')) {
+          continue;
         }
 
-        return;
+        body_end = p;
+        parser->state = s_body_part_boundary;
+        continue;
+
+      case s_body_part_boundary:
+        if (ch == '\n') {
+          parser->state = s_body_part_boundary_dash;
+          continue;
+        }
+
+        if (ch == '\r') {
+          body_end = p;
+          continue;
+        }
+
+        parser->state = s_body_part;
+        continue;
+
+      case s_body_part_boundary_dash:
+        if (ch == '-') {
+          parser->state = s_body_part_boundary_dash_dash;
+          continue;
+        }
+
+        if (ch == '\r') {
+          body_end = p;
+          parser->state = s_body_part_boundary;
+          continue;
+        }
+
+        parser->state = s_body_part;
+        continue;
+
+      case s_body_part_boundary_dash_dash:
+        if (ch == '-') {
+          parser->nread = 0;
+          parser->state = s_body_part_boundary_compare;
+          continue;
+        }
+
+        if (ch == '\r') {
+          body_end = p;
+          parser->state = s_body_part_boundary;
+          continue;
+        }
+
+        parser->state = s_body_part;
+        continue;
+
+      case s_body_part_boundary_compare:
+        if (LIKELY(parser->nread < parser->boundary_len)) {
+          if (LIKELY(ch == parser->boundary[parser->nread++])) {
+            continue;
+          }
+
+          if (ch == '\r') {
+            body_end = p;
+            parser->state = s_body_part_boundary;
+            continue;
+          }
+
+          parser->state = s_body_part;
+          continue;
+        } else {
+          if (settings->on_body(parser, body_start,
+                                body_end - body_start) == 0) {
+            if (LIKELY(ch == '\r')) {
+              parser->state = s_boundary_cr;
+              continue;
+            }
+
+            if (ch == '-') {
+              parser->state = s_boundary_almost_done;
+              continue;
+            }
+          }
+        }
+        return -1;
+
+      default:
+        UNREACHABLE;
     }
+    UNREACHABLE;
+  }
+
+  return -1;
 }
 
-void MultipartParser::close() {
-    // Dispose of buffer
-    if (posn) {
-        for (size_t i = 0; i < buffer.size(); i++)
-            sub_parser->parse(buffer[i]);
-        buffer = "";
-    }
-
-    if (sub_parser) {
-        sub_parser->close();
-        delete sub_parser;
-    }
-
-    if (sub_obj) {
-        delete sub_obj;
-        sub_obj = 0;
-    }
-}
-
-Parser *ParserFactory::generic(ClientInterface *client, Object *obj) {
-    return new AnyObjectParser(client, obj);
-}
-
-// current only multipart supported
-Parser *ParserFactory::create(ClientInterface *client, Object *obj) {
-    std::string encoding =
-            obj->fields["content-transfer-encoding"].value;
-
-    return new MultipartParser(client, obj);
-}
-
-/**
- * Default constructor.
- */
-Decoder::Decoder() {
-    parser = 0;
-    obj = new Object();
-}
-
-void Decoder::decode(unsigned char c)
+const char* multipart_get_name(const char* str, size_t len,
+                               size_t* value_len)
 {
-    if (!parser) {
-        parser = ParserFactory::generic(this, obj);
+  const char* str_end = &str[len];
+  const char* p = str;
+
+  const char* value_start;
+
+  typedef enum
+  { s_seek
+  , s_N
+  , s_NA
+  , s_NAM
+  , s_NAME
+  , s_NAME_EQ
+  , s_NAME_EQ_QUOT
+  , s_value_start
+  , s_value
+  , s_value_end
+  } e_state;
+
+  for (e_state state = s_seek; p < str_end; ++p)
+  {
+    const char ch = *p;
+
+    switch (state)
+    {
+      case s_seek:
+      _reset:
+        if (UNLIKELY(LOWER(ch) == 'n')) {
+          state = s_N;
+        }
+        continue;
+
+      case s_N:
+        if (LIKELY(ch == 'a' || ch == 'A')) {
+          state = s_NA;
+        } else {
+          state = s_seek;
+          goto _reset;
+        }
+        continue;
+
+      case s_NA:
+        if (LIKELY(ch == 'm' || ch == 'M')) {
+          state = s_NAM;
+        } else {
+          state = s_seek;
+          goto _reset;
+        }
+        continue;
+
+      case s_NAM:
+        if (LIKELY(ch == 'e' || ch == 'E')) {
+          state = s_NAME;
+        } else {
+          state = s_seek;
+          goto _reset;
+        }
+        continue;
+
+      case s_NAME:
+        if (LIKELY(ch == '=')) {
+          state = s_NAME_EQ;
+        } else {
+          if (ch == ' ') {                                /*  Skip whitespace */
+            continue;
+          }
+
+          state = s_seek;
+          goto _reset;
+        }
+        continue;
+
+      case s_NAME_EQ:
+        if (LIKELY(ch == '"')) {
+          state = s_value_start;
+        } else {
+          if (ch == ' ') {                                /*  Skip whitespace */
+            continue;
+          }
+
+          state = s_seek;
+          goto _reset;
+        }
+        continue;
+
+      case s_value_start:
+        value_start = p;
+
+        if (LIKELY(ch != '"')) {
+          state = s_value;
+        } else {
+          *value_len = 0;                          /* detected an empty value */
+          return value_start;
+        }
+        continue;
+
+      case s_value:
+        if (LIKELY(ch != '"')) {
+          continue;
+        } else {
+          *value_len = p - value_start;
+          return value_start;
+        }
+
+      default:
+        UNREACHABLE;
     }
-    parser->parse(c);
+  }
+
+  return NULL;
 }
 
-/**
- * The data producer should call this once all data has been presented
- * to the decoder to finalise processing and clean up all resources.
- */
-void Decoder::close()
+const char* multipart_get_filename(const char* str, size_t len,
+                                   size_t* value_len)
 {
-    if (parser) {
-        parser->close();
-        delete parser;
+  const char* str_end = &str[len];
+  const char* p = str;
+
+  const char* value_start;
+
+  typedef enum
+    { s_F
+    , s_FI
+    , s_FIL
+    , s_FILE
+    , s_FILEN
+    , s_FILENA
+    , s_FILENAM
+    , s_FILENAME
+    , s_FILENAME_EQ
+    , s_FILENAME_EQ_QUOT
+    , s_value_start
+    , s_value
+  } e_state;
+
+  for (e_state state = s_F; p < str_end; ++p)
+  {
+    const char ch = *p;
+
+    switch (state)
+    {
+      case s_F:
+      _reset:
+        if (UNLIKELY(LOWER(ch) == 'f')) {
+          state = s_FI;
+        }
+        continue;
+
+      case s_FI:
+        if (LIKELY(ch == 'i') || ch == 'I') {
+          state = s_FIL;
+        } else {
+          state = s_F;
+          goto _reset;
+        }
+        continue;
+
+      case s_FIL:
+        if (LIKELY(ch == 'l') || ch == 'L') {
+          state = s_FILE;
+        } else {
+          state = s_F;
+          goto _reset;
+        }
+        continue;
+
+      case s_FILE:
+        if (LIKELY(ch == 'e') || ch == 'E') {
+          state = s_FILEN;
+        } else {
+          state = s_F;
+          goto _reset;
+        }
+        continue;
+
+      case s_FILEN:
+        if (LIKELY(ch == 'n') || ch == 'N') {
+          state = s_FILENA;
+        } else {
+          state = s_F;
+          goto _reset;
+        }
+        continue;
+
+      case s_FILENA:
+        if (LIKELY(ch == 'a') || ch == 'A') {
+          state = s_FILENAM;
+        } else {
+          state = s_F;
+          goto _reset;
+        }
+        continue;
+
+      case s_FILENAM:
+        if (LIKELY(ch == 'm') || ch == 'M') {
+          state = s_FILENAME;
+        } else {
+          state = s_F;
+          goto _reset;
+        }
+        continue;
+
+      case s_FILENAME:
+        if (LIKELY(ch == 'e') || ch == 'E') {
+          state = s_FILENAME_EQ;
+        } else {
+          state = s_F;
+          goto _reset;
+        }
+        continue;
+
+      case s_FILENAME_EQ:
+        if (LIKELY(ch == '=')) {
+          state = s_FILENAME_EQ_QUOT;
+        } else {
+          if (ch == ' ') {                                /*  Skip whitespace */
+            continue;
+          }
+
+          state = s_F;
+          goto _reset;
+        }
+        continue;
+
+      case s_FILENAME_EQ_QUOT:
+        if (LIKELY(ch == '"')) {
+          state = s_value_start;
+        } else {
+          if (ch == ' ') {                                /*  Skip whitespace */
+            continue;
+          }
+
+          state = s_F;
+          goto _reset;
+        }
+        continue;
+
+      case s_value_start:
+        value_start = p;
+        state = s_value;
+        FALLTHROUGH;
+
+      case s_value:
+        if (LIKELY(ch != '"')) {
+          continue;
+        } else {
+          *value_len = p - value_start;
+          return value_start;
+        }
+
+      default:
+        UNREACHABLE;
     }
-    delete obj;
-}
+  }
 
-/**
- * Implementation of class StringDecoder.
- *
- * Decodes a MIME string and allows retrieving form data values given a key when MIME
- * content type is multipart/form-data.
- *
- * @author Chris Johnson
- */
-
-/**
- * Called when a MIME object is discovered in the input stream.  Data may or may not follow.
- * @param object - an instance representing a MIME object.
- */
-/* protected */
-void StringDecoder::object_created(Object *object) {
-}
-
-/**
- * Called when a MIME object's data starts to be read.
- * @param object - an instance representing a MIME object.
- */
-/* protected */
-void StringDecoder::data_start(Object *object) {
-    // every time new data starts, initialize a new part string.
-    part = "";
-}
-
-/**
- * Called once per byte in the MIME object's data.  Saves that data to
- * our class string for later use.
- * @param data - pointer to actual data.
- * @param len - number of bytes in data passed.
- * @param object - an instance representing a MIME object.
- */
-/* protected */
-void StringDecoder::data(Object *object, unsigned char *data, int len) {
-    for (int i = 0; i < len; i++) {
-        // for each byte in the data stream, append it to MIME part string.
-        part += data[i];
-    }
-}
-
-/**
- * Called when all the data from the MIME object has been delivered.  Saves
- * the string we built and the key name (e.g. form item name) to our hash (map)
- * for future access.
- * @param object - an instance representing a MIME object.
- */
-/* protected */
-void StringDecoder::data_end(Object *object) {
-    HeaderField hf = object->fields.at("content-disposition");
-    std::string name = hf.attributes.at("name");
-
-    // End of data stream aka MIME part, save form NAME and data VALUE.
-    results[name] = part;
-}
-
-/**
- * Public API method specifies MIME string to decode.
- * @param string - the MIME string to decode.
- */
-void StringDecoder::processString(std::string input) {
-    for ( std::string::iterator it=input.begin(); it!=input.end(); ++it) {
-        decode(*it);
-    }
-}
-
-/**
- * Public API method retrieves a MIME form data element value.
- * @param string - the MIME form data element name to retrieve.
- * @return string - the form data.
- */
-std::string StringDecoder::getFormValue(std::string formName) {
-    if (results.count(formName) > 0) {
-        return results.at(formName);
-    } else {
-        return "";
-    }
-}
-
-/**
- * Public API method dumps all known MIME form data key-value pairs.
- * @return string - one line per key-value pair.
- */
-std::string StringDecoder::dump() {
-    std::string ret = "Form key-value dump:\n";
-    std::map <std::string, std::string>::iterator it;
-    for (it = results.begin(); it != results.end(); it++) {
-        ret += "results[" + it->first + "] = " + it->second + '\n';
-    }
-    return ret;
+  return NULL;
 }
 
 }   // namespace utils
