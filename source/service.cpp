@@ -89,6 +89,18 @@ int32_t on_body(utils::multipart_parser* parser, const char *at, size_t length) 
     return 0;
 }
 
+const char* get_content(utils::multipart_parser* parser, std::string& field_name, size_t& len) {
+    if (parser->_datas.count(field_name)) {
+        len = parser->_datas[field_name].second;
+        return parser->_datas[field_name].first;
+    }
+    return nullptr;
+}
+
+std::string get_filename(utils::multipart_parser* parser, std::string& field_name) {
+    return parser->_field_filename.count(field_name) ? parser->_field_filename[field_name] : "";
+}
+
 std::string msg_format(int32_t row_num, const std::string& name, const std::string& standard) {
     return "第" + std::to_string(row_num) + "行, " + name + "：数据有误，数据格式错误或者超出数据导入范围（" + standard + "）。";
 }
@@ -335,8 +347,8 @@ void NicerService::check_excel_status(
 
     size_t len;
     std::string file_field_name = "update_file";
-    const char* file_content = parser.get_content(file_field_name, len);
-    std::string filename = parser.get_filename(file_field_name);
+    const char* file_content = get_content(&parser, file_field_name, len);
+    std::string filename = get_filename(&parser, file_field_name);
 
     xls::xls_error_t error = xls::LIBXLS_OK;
     xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)file_content, len, "UTF-8", &error);
