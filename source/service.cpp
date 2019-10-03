@@ -253,6 +253,8 @@ void NicerService::check_excel_status(
     std::string str = ctrl->request_attachment().to_string();
 
     utils::StringDecoder decoder;
+    std::string boundary = ctrl->http_request().GetHeader("Content-Type");
+    decoder.processString(boundary);
     decoder.processString(str);
     decoder.close();
     INFLOG << "decoder dump: " << decoder.dump();
