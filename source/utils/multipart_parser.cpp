@@ -59,14 +59,6 @@ do {                                                                 \
 # endif
 #endif
 
-#ifndef FALLTHROUGH
-# if defined(__GNUC__) || defined(__clang__)
-#  define FALLTHROUGH __attribute__((fallthrough))
-# else
-#  define FALLTHROUGH ((void)0)
-# endif
-#endif
-
 
 enum state
   { s_start
@@ -182,7 +174,6 @@ int multipart_parser_execute(multipart_parser *parser,
           parser->state = s_headers_done;
           continue;
         }
-        FALLTHROUGH;
 
       case s_header_field_start:
         if ((ch >= 'A' && ch <= 'Z') || (ch >= 'a' && ch <= 'z')) {
@@ -252,7 +243,6 @@ int multipart_parser_execute(multipart_parser *parser,
       case s_body_part_start:
         body_start = p;
         parser->state = s_body_part;
-        FALLTHROUGH;
 
       case s_body_part:
         if (LIKELY(ch != '\r')) {
@@ -591,7 +581,6 @@ const char* multipart_get_filename(const char* str, size_t len,
       case s_value_start:
         value_start = p;
         state = s_value;
-        FALLTHROUGH;
 
       case s_value:
         if (LIKELY(ch != '"')) {
