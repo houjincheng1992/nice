@@ -4,7 +4,7 @@
 #include <string>
 #include <utility>
 
-#include "utls/multipart_parser.h"
+#include "utils/multipart_parser.h"
 
 namespace nicer {
 namespace svc {
@@ -36,7 +36,7 @@ public:
         if (parser == nullptr || at == nullptr) {
             return -1;
         }
-        std::string header_field = std::string(at, length)
+        std::string header_field = std::string(at, length);
         if (header_field == "Content-Type" || header_field == "Content-Disposition") {
             _last_field_name = header_field;
         } else {
@@ -92,7 +92,7 @@ public:
     }
 private:
     // {field_name, {field_value_pointer, field_value_len}}
-    std::map<std::string, std::pair<const char*, size_t len>> _datas;
+    std::map<std::string, std::pair<const char*, size_t>> _datas;
     std::map<std::string, std::string> _field_filename;
     std::string _last_field_name;
     std::string _last_header_name;

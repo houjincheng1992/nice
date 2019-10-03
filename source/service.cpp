@@ -11,7 +11,7 @@
 #include <butil/time.h>
 #include "xls.h"
 
-#include "utils/callback.h"
+#include "svc/callback.h"
 #include "utils/logger.h"
 #include "utils/multipart_parser.h"
 #include "utils/numutils.h"
@@ -255,18 +255,18 @@ void NicerService::check_excel_status(
     std::string content_type = ctrl->http_request().content_type();
 
     size_t boundary_len;
-    const char* boundary = utils::get_boundary(content_type.c_str(), content_type.size(), boundary_len);
+    const char* boundary = svc::get_boundary(content_type.c_str(), content_type.size(), boundary_len);
     utils::multipart_parser parser;
     parser.boundary = boundary;
     parser.boundary_len = boundary_len;
     utils::multipart_parser_init(&parser);
 
-    utils::MultipartCallBack multipart_callback;
+    svc::MultipartCallBack multipart_callback;
     utils::multipart_parser_settings parser_settings;
     utils::multipart_parser_settings_init(&parser_settings);
 
     parser_settings.on_boundary_begin = multipart_callback.on_boundary_begin;
-    parser_settings.on_headers_complete = multipart_callback.on_headers_complete
+    parser_settings.on_headers_complete = multipart_callback.on_headers_complete;
     parser_settings.on_body_parts_complete = multipart_callback.on_body_parts_complete;
     parser_settings.on_header_field = multipart_callback.on_header_field;
     parser_settings.on_header_value = multipart_callback.on_header_value;

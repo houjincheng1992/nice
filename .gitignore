@@ -5,3 +5,4 @@ proto/*.h
 proto/*.cpp
 nicer
 core.*
+rpc_data/*
