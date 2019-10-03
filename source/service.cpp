@@ -327,11 +327,20 @@ void NicerService::check_excel_status(
     std::string str = ctrl->request_attachment().to_string();
     std::string content_type = ctrl->http_request().content_type();
 
-    size_t boundary_len;
-    const char* boundary = utils::get_boundary(content_type.c_str(), content_type.size(), &boundary_len);
+    std::vector<std::string> content_type_vec;
+    boost::split(content_type_vec, content_type, boost::is_any_of(";"));
+    std::string boundary;
+    for (auto &content_type_split : content_type_vec) {
+        size_t pos = content_type_split.find("boundary=");
+        if (pos == std::string::npos) {
+            continue;
+        }
+        boundary = content_type_split.substr(pos + 9);
+        break;
+    }
     utils::multipart_parser parser;
-    parser.boundary = boundary;
-    parser.boundary_len = boundary_len;
+    parser.boundary = boundary.c_str;
+    parser.boundary_len = boundary.size();
     utils::multipart_parser_init(&parser);
 
     utils::multipart_parser_settings parser_settings;
