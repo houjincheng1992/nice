@@ -368,7 +368,8 @@ const char* multipart_get_name(const char* str, size_t len,
   , s_value_end
   } e_state;
 
-  for (e_state state = s_seek; p < str_end; ++p)
+  e_state state = s_seek;
+  for (; p < str_end; ++p)
   {
     const char ch = *p;
 
@@ -484,7 +485,8 @@ const char* multipart_get_filename(const char* str, size_t len,
     , s_value
   } e_state;
 
-  for (e_state state = s_F; p < str_end; ++p)
+  e_state state = s_F;
+  for (; p < str_end; ++p)
   {
     const char ch = *p;
 

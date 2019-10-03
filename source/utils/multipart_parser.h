@@ -30,10 +30,6 @@
 namespace nicer {
 namespace utils {
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 typedef struct multipart_parser multipart_parser;
 typedef struct multipart_parser_settings multipart_parser_settings;
 
@@ -67,6 +63,7 @@ struct multipart_parser {
 
 	const char* boundary;   /* set this to a boundary string taken from headers */
 	size_t boundary_len;
+
 };
 
 void multipart_parser_init(multipart_parser *parser);
@@ -101,10 +98,6 @@ const char* multipart_get_name(const char* str, size_t len, size_t* value_len);
  */
 const char* multipart_get_filename(const char* str, size_t len,
                                    size_t* value_len);
-
-#ifdef __cplusplus
-}
-#endif
 
 }	// namespace utils
 }	// namespace nicer

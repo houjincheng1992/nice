@@ -255,7 +255,7 @@ void NicerService::check_excel_status(
     std::string content_type = ctrl->http_request().content_type();
 
     size_t boundary_len;
-    const char* boundary = svc::get_boundary(content_type.c_str(), content_type.size(), boundary_len);
+    const char* boundary = utils::get_boundary(content_type.c_str(), content_type.size(), boundary_len);
     utils::multipart_parser parser;
     parser.boundary = boundary;
     parser.boundary_len = boundary_len;
