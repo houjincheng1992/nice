@@ -253,9 +253,11 @@ void NicerService::check_excel_status(
     std::string str = ctrl->request_attachment().to_string();
     std::string content_type = ctrl->http_request().content_type();
     std::string content_type_str = "Content-Type: " + content_type;
+    char content_type_char_list[content_type_str.size() + 1];
+    strcpy(content_type_char_list, content_type_str.c_str());
 
     Fastcgipp::Http::Environment<char> environment;
-    environment.fill(content_type_str.c_str(), content_type_str.size());
+    environment.fill(content_type_char_list, sizeof(content_type_char_list));
     environment.fillPostBuffer(str.c_str(), str.size());
     environment.parsePostsMultipart();
 
