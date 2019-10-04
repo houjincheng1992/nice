@@ -49,6 +49,7 @@ else ifeq ($(SYSTEM),Linux)
 	STATIC_LINKINGS += -lbrpc
 	STATIC_LINKINGS += -llua
 	DYNAMIC_LINKINGS += -lxlsreader
+	STATIC_LINKINGS += -lfastcgipp
 	LINK_OPTIONS_SO = -Xlinker "-(" $^ -Xlinker "-)" $(STATIC_LINKINGS) $(DYNAMIC_LINKINGS)
 	LINK_OPTIONS = -Xlinker "-(" $^ -Wl,-Bstatic $(STATIC_LINKINGS) -Wl,-Bdynamic -Xlinker "-)" $(DYNAMIC_LINKINGS)
 endif
