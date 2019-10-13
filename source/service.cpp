@@ -282,10 +282,10 @@ void NicerService::check_excel_status(
             continue;
         }
 
-        std::string name = field->getParameter("name")->getValue()->generate();
+        std::string name = field->getParameter("name")->getValue().generate();
         if (name == "upload_file") {
             excel_str = msg_vmime->getBody()->getPartAt(i)->getBody()->generate();
-            filename = field->getParameter("filename")->getValueAs<std::string>();
+            filename = field->getParameter("filename")->getValue().generate();
         }
     }
 
