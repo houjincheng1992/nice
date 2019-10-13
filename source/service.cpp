@@ -277,7 +277,7 @@ void NicerService::check_excel_status(
         if (!header->hasField("Content-Disposition")) {
             continue;
         }
-        vmime::shared_ptr<vmime::parameter> field = header->findField<vmime::parameter>("Content-Disposition");
+        vmime::shared_ptr<vmime::parameterizedHeaderField> field = header->findField<vmime::parameterizedHeaderField>("Content-Disposition");
         if (!field->hasParameter("name")) {
             continue;
         }
@@ -285,7 +285,7 @@ void NicerService::check_excel_status(
         std::string name = field->getParameter("name")->getValueAs<std::string>();
         if (name == "upload_file") {
             excel_str = msg_vmime->getBody()->getPartAt(i)->getBody()->generate();
-            filename = ield->getParameter("filename")->getValueAs<std::string>();
+            filename = field->getParameter("filename")->getValueAs<std::string>();
         }
     }
 
