@@ -240,6 +240,12 @@ bool row_validate(
     return true;
 }
 
+std::string get_query_param(const baidu::rpc::Controller* ctrl,
+        const std::string& param, const char* default_value) {
+    const std::string* cstr = ctrl->http_request().uri().GetQuery(param);
+    return cstr != NULL ? Uri::decode(*cstr) : std::string(default_value);
+}
+
 void NicerService::check_excel_status(
                         ::google::protobuf::RpcController* controller,
                         const ::nicer::HttpRequest* request,
@@ -251,46 +257,12 @@ void NicerService::check_excel_status(
     brpc::Controller* ctrl = static_cast<brpc::Controller*>(controller);
 
     std::string str = ctrl->request_attachment().to_string();
-    std::string content_type = ctrl->http_request().content_type();
-
-    // std::string content_type_str = "Content-Type: " + content_type + "\r\n\r\n";
-    // std::string body_to_parse = content_type_str + str;
-
-    vmime::shared_ptr<vmime::header> hdr = vmime::make_shared<vmime::header>();
-    std::string content_type_str = "Content-Type: " + content_type;
-    hdr->parse(content_type_str);
-
-    vmime::shared_ptr<vmime::bodyPart> msg_vmime = vmime::make_shared<vmime::bodyPart>();
-    msg_vmime->setHeader(hdr);
-    msg_vmime->parse(str);
-
-    if (!msg_vmime || !msg_vmime->getBody()) {
-        std::string response_str = "{\"msg\":\"error\"}";
-        ctrl->response_attachment().append(response_str);
-        return;
-    }
-
-    std::string excel_str;
-    std::string filename;
-    for (int32_t i = 0; i < msg_vmime->getBody()->getPartCount(); ++i) {
-        vmime::shared_ptr<vmime::header> header = msg_vmime->getBody()->getPartAt(i)->getHeader();
-        if (!header->hasField("Content-Disposition")) {
-            continue;
-        }
-        vmime::shared_ptr<vmime::parameterizedHeaderField> field = header->findField<vmime::parameterizedHeaderField>("Content-Disposition");
-        if (!field->hasParameter("name")) {
-            continue;
-        }
-
-        std::string name = field->getParameter("name")->getValue().generate();
-        if (name == "upload_file") {
-            excel_str = msg_vmime->getBody()->getPartAt(i)->getBody()->generate();
-            filename = field->getParameter("filename")->getValue().generate();
-        }
-    }
+    // 目前接口设计不太合理，但是目前multipart/form-data的库没有比较靠谱的
+    std::string filename = get_query_param(ctrl, "filename", "");
+    INFLOG << "filename: " << filename;
 
     xls::xls_error_t error = xls::LIBXLS_OK;
-    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)excel_str.data(), excel_str.size(), "UTF-8", &error);
+    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)str.data(), str.size(), "UTF-8", &error);
     if (wb == NULL) {
         ERRLOG << "error reading file: " << xls_getError(error);
         std::string response_str = "{\"msg\":\"done\"}";
