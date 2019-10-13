@@ -240,7 +240,7 @@ bool row_validate(
     return true;
 }
 
-std::string get_query_param(const baidu::rpc::Controller* ctrl,
+std::string get_query_param(const brpc::Controllerr* ctrl,
         const std::string& param, const char* default_value) {
     const std::string* cstr = ctrl->http_request().uri().GetQuery(param);
     return cstr != NULL ? Uri::decode(*cstr) : std::string(default_value);
