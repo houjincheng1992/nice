@@ -14,6 +14,7 @@
 
 #include "utils/logger.h"
 #include "utils/numutils.h"
+#include "utils/url.h"
 
 namespace nicer {
 
@@ -240,10 +241,10 @@ bool row_validate(
     return true;
 }
 
-std::string get_query_param(const brpc::Controllerr* ctrl,
+std::string get_query_param(const brpc::Controller* ctrl,
         const std::string& param, const char* default_value) {
     const std::string* cstr = ctrl->http_request().uri().GetQuery(param);
-    return cstr != NULL ? Uri::decode(*cstr) : std::string(default_value);
+    return cstr != NULL ? utils::Uri::decode(*cstr) : std::string(default_value);
 }
 
 void NicerService::check_excel_status(
