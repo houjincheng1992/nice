@@ -33,6 +33,23 @@ public:
 
         return url_decode_str;
     }
+private:
+    inline static uint8_t decode_char(const char& c) {
+        if ('0' <= c && c <= '9') {
+            return c - '0';
+        }
+
+        if ('A' <= c && c <= 'F') {
+            return c - 'A' + 10;
+        }
+
+        if ('a' <= c && c <= 'f') {
+            return c - 'a' + 10;
+        }
+
+        /* 容错情况,不会出现 */
+        return c;
+    }
 };
 }
 }
