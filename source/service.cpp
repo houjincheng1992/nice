@@ -256,13 +256,13 @@ void NicerService::check_excel_status(
     // std::string content_type_str = "Content-Type: " + content_type + "\r\n\r\n";
     // std::string body_to_parse = content_type_str + str;
 
-    vmime::header hdr;
+    vmime::shared_ptr<vmime::header> hdr = vmime::make_shared<vmime::header>();
     std::string content_type_str = "Content-Type: " + content_type;
-    hdr.parse(content_type_str);
+    hdr->parse(content_type_str);
 
     vmime::shared_ptr<vmime::bodyPart> msg_vmime = vmime::make_shared<vmime::bodyPart>();
     msg_vmime->setHeader(hdr);
-    msg_vmime->parse(body_to_parse);
+    msg_vmime->parse(str);
 
     if (!msg_vmime || !msg_vmime->getBody()) {
         std::string response_str = "{\"msg\":\"error\"}";
@@ -277,7 +277,7 @@ void NicerService::check_excel_status(
         if (!header->hasField("Content-Disposition")) {
             continue;
         }
-        vmime::shared_ptr<vmime::parameterizedField> field = header−>findField<vmime::parameterizedField>("Content-Disposition");
+        vmime::shared_ptr<vmime::parameter> field = header->findField<vmime::parameter>("Content-Disposition");
         if (!field->hasParameter("name")) {
             continue;
         }
