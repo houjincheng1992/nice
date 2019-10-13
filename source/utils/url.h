@@ -5,6 +5,7 @@
 namespace nicer {
 namespace utils {
 class Uri {
+public:
     static std::string decode(const std::string& str) {
         std::string url_decode_str;
         url_decode_str.reserve(str.size());
