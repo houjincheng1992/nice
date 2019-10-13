@@ -9,7 +9,7 @@
 #include <boost/algorithm/string/join.hpp>
 
 #include <butil/time.h>
-#include <fastcgi++/http.hpp>
+#include <vmime/vmime.hpp>
 #include "xls.h"
 
 #include "utils/logger.h"
@@ -252,25 +252,45 @@ void NicerService::check_excel_status(
 
     std::string str = ctrl->request_attachment().to_string();
     std::string content_type = ctrl->http_request().content_type();
+
+    // std::string content_type_str = "Content-Type: " + content_type + "\r\n\r\n";
+    // std::string body_to_parse = content_type_str + str;
+
+    vmime::header hdr;
     std::string content_type_str = "Content-Type: " + content_type;
-    char content_type_char_list[content_type_str.size() + 1];
-    strcpy(content_type_char_list, content_type_str.c_str());
+    hdr.parse(content_type_str);
 
-    Fastcgipp::Http::Environment<char> environment;
-    environment.fill(content_type_char_list, sizeof(content_type_char_list));
-    environment.fillPostBuffer(str.c_str(), str.size());
-    environment.parsePostsMultipart();
+    vmime::shared_ptr<vmime::bodyPart> msg_vmime = vmime::make_shared<vmime::bodyPart>();
+    msg_vmime->setHeader(hdr);
+    msg_vmime->parse(body_to_parse);
 
-    if (!environment.posts.count("upload_file")) {
-        std::string response_str = "{\"msg\":\"done\"}";
+    if (!msg_vmime || !msg_vmime->getBody()) {
+        std::string response_str = "{\"msg\":\"error\"}";
         ctrl->response_attachment().append(response_str);
         return;
     }
 
-    INFLOG << "upload_file: " << environment.posts["upload_file"].filename;
+    std::string excel_str;
+    std::string filename;
+    for (int32_t i = 0; i < msg_vmime->getBody()->getPartCount(); ++i) {
+        vmime::shared_ptr<vmime::header> header = msg_vmime->getBody()->getPartAt(i)->getHeader();
+        if (!header->hasField("Content-Disposition")) {
+            continue;
+        }
+        vmime::shared_ptr<vmime::parameterizedField> field = header−>findField<vmime::parameterizedField>("Content-Disposition");
+        if (!field->hasParameter("name")) {
+            continue;
+        }
+
+        std::string name = field->getParameter("name")->getValueAs<std::string>();
+        if (name == "upload_file") {
+            excel_str = msg_vmime->getBody()->getPartAt(i)->getBody()->generate();
+            filename = ield->getParameter("filename")->getValueAs<std::string>();
+        }
+    }
 
     xls::xls_error_t error = xls::LIBXLS_OK;
-    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)environment.posts["upload_file"].data(), environment.posts["upload_file"].size(), "UTF-8", &error);
+    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)excel_str.data(), excel_str.size(), "UTF-8", &error);
     if (wb == NULL) {
         ERRLOG << "error reading file: " << xls_getError(error);
         std::string response_str = "{\"msg\":\"done\"}";
