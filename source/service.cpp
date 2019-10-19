@@ -15,18 +15,10 @@
 #include "utils/logger.h"
 #include "utils/numutils.h"
 #include "utils/url.h"
+#include "svc/checkservice.h"
+#include "xlsx/xlsx.h"
 
 namespace nicer {
-
-static const std::set<std::string> required_fields = {
-    "年级编号", "班级编号", "班级名称", "学籍号", "民族代码", "姓名", "性别", "出生日期", "家庭住址",
-};
-
-static const std::vector<std::string> optional_fields = {
-    "身高", "体重", "肺活量", "50米跑", "坐位体前屈", "一分钟跳绳", "一分钟仰卧起坐", "50米×8往返跑",
-    "引体向上", "400米跑", "立定跳远", "1000米跑", "800米跑", "左眼裸眼视力", "右眼裸眼视力",
-    "左眼串镜", "右眼串镜", "左眼屈光不正", "右眼屈光不正",
-};
 
 std::string msg_format(int32_t row_num, const std::string& name, const std::string& standard) {
     return "第" + std::to_string(row_num) + "行, " + name + "：数据有误，数据格式错误或者超出数据导入范围（" + standard + "）。";
@@ -41,7 +33,7 @@ bool row_validate(
 
     bool is_high_grade = utils::NumUtils::stoi(row_data[title_index["年级编号"]]) > 20;
     bool is_male = row_data[title_index["性别"]] == "1";
-    for (auto &field_name : optional_fields) {
+    for (auto &field_name : svc::optional_fields) {
         if (field_name == "身高") {
             float height = utils::NumUtils::stof(row_data[title_index[field_name]]);
             if(height < 80 || height > 250){
@@ -258,95 +250,110 @@ void NicerService::check_excel_status(
     brpc::Controller* ctrl = static_cast<brpc::Controller*>(controller);
 
     std::string str = ctrl->request_attachment().to_string();
+
     // 目前接口设计不太合理，但是目前multipart/form-data的库没有比较靠谱的
     std::string filename = get_query_param(ctrl, "filename", "");
-    INFLOG << "filename: " << filename;
+    svc::FileType file_type = svc::get_file_type(filename);
 
-    xls::xls_error_t error = xls::LIBXLS_OK;
-    xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)str.data(), str.size(), "UTF-8", &error);
-    if (wb == NULL) {
-        ERRLOG << "error reading file: " << xls_getError(error);
-        std::string response_str = "{\"msg\":\"done\"}";
-        ctrl->response_attachment().append(response_str);
-        return;
+    std::string response = "";
+    if (file_type == svc::FileType::NOTVALID) {
+        // not valid logic
+        response = "{\"msg\":\"file not valid, only excel support.\", \"status\":-1}";
+    } else if (file_type == svc::FileType::XLSX) {
+        // xlsx process
+        xlsx::Xlsx xlsx = xlsx::xlsx_open_buffer(str);
+        xlsx.dump();
+    } else if (file_type == svc::FileType::XLS) {
+        // xls process
     }
 
-    std::vector<std::string> err_msg;
-    std::string msg;
-    for (int32_t i = 0; i < wb->sheets.count; i++) { // sheets
-        xls::xlsWorkSheet *work_sheet = xls::xls_getWorkSheet(wb, i);
-        error = xls::xls_parseWorkSheet(work_sheet);
-        // rows
-        int32_t rows_num = work_sheet->rows.lastrow;
-        int32_t cols_num = work_sheet->rows.lastcol;
+    // xls::xls_error_t error = xls::LIBXLS_OK;
+    // xls::xlsWorkBook *wb = xls::xls_open_buffer((const unsigned char*)str.data(), str.size(), "UTF-8", &error);
+    // if (wb == NULL) {
+    //     ERRLOG << "error reading file: " << xls_getError(error);
+    //     std::string response_str = "{\"msg\":\"done\"}";
+    //     ctrl->response_attachment().append(response_str);
+    //     return;
+    // }
 
-        if (rows_num <= 1) {
-            continue;
-        }
+    // std::vector<std::string> err_msg;
+    // std::string msg;
+    // for (int32_t i = 0; i < wb->sheets.count; i++) { // sheets
+    //     xls::xlsWorkSheet *work_sheet = xls::xls_getWorkSheet(wb, i);
+    //     error = xls::xls_parseWorkSheet(work_sheet);
+    //     // rows
+    //     int32_t rows_num = work_sheet->rows.lastrow;
+    //     int32_t cols_num = work_sheet->rows.lastcol;
 
-        std::vector<std::string> titles;    // 标题数组
-        std::map<std::string, int32_t> title_index;     // 标题与位置对应关系
-        std::vector<std::vector<std::string>> datas;
-        xls::xlsRow *row = xls::xls_row(work_sheet, 0);
-        for (int32_t col = 0; col < cols_num; ++col) {
-            xls::xlsCell *cell = &row->cells.cell[col];
-            if (cell->str == NULL) {
-                err_msg.emplace_back("请检查标题");
-                break;
-            }
-            titles.emplace_back(cell->str);
-            title_index.emplace(cell->str, col);
-        }
+    //     if (rows_num <= 1) {
+    //         continue;
+    //     }
 
-        // 会有几个sheet呢? 此处可能会有bug
-        if (err_msg.size()) {
-            continue;
-        }
+    //     std::vector<std::string> titles;    // 标题数组
+    //     std::map<std::string, int32_t> title_index;     // 标题与位置对应关系
+    //     std::vector<std::vector<std::string>> datas;
+    //     xls::xlsRow *row = xls::xls_row(work_sheet, 0);
+    //     for (int32_t col = 0; col < cols_num; ++col) {
+    //         xls::xlsCell *cell = &row->cells.cell[col];
+    //         if (cell->str == NULL) {
+    //             err_msg.emplace_back("请检查标题");
+    //             break;
+    //         }
+    //         titles.emplace_back(cell->str);
+    //         title_index.emplace(cell->str, col);
+    //     }
 
-        for (int32_t j = 1; j < rows_num; j++) {
-            xls::xlsRow *row = xls::xls_row(work_sheet, j);
+    //     // 会有几个sheet呢? 此处可能会有bug
+    //     if (err_msg.size()) {
+    //         continue;
+    //     }
 
-            // columns
-            if (cols_num > titles.size()) {
-                msg = "第" + std::to_string(j + 1) + "行数据信息项目异常。";
-                err_msg.emplace_back(msg);
-                continue;
-            }
+    //     for (int32_t j = 1; j < rows_num; j++) {
+    //         xls::xlsRow *row = xls::xls_row(work_sheet, j);
 
-            bool is_row_empty = true;
-            bool is_incomplete = false;
+    //         // columns
+    //         if (cols_num > titles.size()) {
+    //             msg = "第" + std::to_string(j + 1) + "行数据信息项目异常。";
+    //             err_msg.emplace_back(msg);
+    //             continue;
+    //         }
 
-            std::vector<std::string> row_data;
-            for (int32_t k = 0; k < cols_num; k++) {
-                xls::xlsCell *cell = &row->cells.cell[k];
-                if (required_fields.count(titles[k]) && cell->str == NULL) {
-                    is_incomplete = true;
-                    break;
-                }
-                is_row_empty = false;
-                std::string col_data = cell->str == NULL ? "" : cell->str;
-                row_data.emplace_back(col_data);
-            }
+    //         bool is_row_empty = true;
+    //         bool is_incomplete = false;
 
-            if (is_row_empty) {
-                break;
-            } else if (is_incomplete) {
-                msg = "第" + std::to_string(j + 1) + "行，学生信息填写不完整。";
-                err_msg.emplace_back(msg);
-                continue;
-            }
-            row_validate(title_index, row_data, j, err_msg);
-        }
-        xls::xls_close_WS(work_sheet);
-    }
-    xls::xls_close_WB(wb);
+    //         std::vector<std::string> row_data;
+    //         for (int32_t k = 0; k < cols_num; k++) {
+    //             xls::xlsCell *cell = &row->cells.cell[k];
+    //             if (svc::required_fields.count(titles[k]) && cell->str == NULL) {
+    //                 is_incomplete = true;
+    //                 break;
+    //             }
+    //             is_row_empty = false;
+    //             std::string col_data = cell->str == NULL ? "" : cell->str;
+    //             row_data.emplace_back(col_data);
+    //         }
+
+    //         if (is_row_empty) {
+    //             break;
+    //         } else if (is_incomplete) {
+    //             msg = "第" + std::to_string(j + 1) + "行，学生信息填写不完整。";
+    //             err_msg.emplace_back(msg);
+    //             continue;
+    //         }
+    //         row_validate(title_index, row_data, j, err_msg);
+    //     }
+    //     xls::xls_close_WS(work_sheet);
+    // }
+    // xls::xls_close_WB(wb);
+
+    // ctrl->http_response().set_content_type("application/json;charset=utf-8");
+    // std::string response_str = "{\"msg\":\"done\"}";
+    // if (err_msg.size()) {
+    //     response_str = "{\"msg\":\"" + boost::algorithm::join(err_msg, ";") +"\"}";
+    // }
 
     ctrl->http_response().set_content_type("application/json;charset=utf-8");
-    std::string response_str = "{\"msg\":\"done\"}";
-    if (err_msg.size()) {
-        response_str = "{\"msg\":\"" + boost::algorithm::join(err_msg, ";") +"\"}";
-    }
-    ctrl->response_attachment().append(response_str);
+    ctrl->response_attachment().append(response);
     gettimeofday(&tv1,NULL);
     INFLOG << "gettimeofday cost: " << (tv1.tv_sec - tv.tv_sec)*1000.0 + (tv1.tv_usec - tv.tv_usec)/1000.0<< "ms";
 }
