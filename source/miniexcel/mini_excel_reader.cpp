@@ -4,8 +4,9 @@
 #include <math.h>
 #include <map>
 
-#include "unzip.h"
-#include "tinyxml2.h"
+#include "minizip/ioapi_mem.h"
+#include "minizip/unzip.h"
+#include "tinyxml2/tinyxml2.h"
 
 #ifndef PATH_MAX
 #define PATH_MAX 260
@@ -50,7 +51,7 @@ bool Zip::open(const char* buffer, int32_t bufsize)
         
     fill_memory_filefunc(&filefunc32, &unzmem);
 
-    _zipfile = unzOpen2("__notused__", &filefunc32);
+    _zipFile = unzOpen2("__notused__", &filefunc32);
     // _zipFile = unzOpen(file);
 
     if (!_zipFile)

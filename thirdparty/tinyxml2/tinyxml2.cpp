@@ -1799,8 +1799,10 @@ void XMLDocument::Clear()
     _errorStr1 = 0;
     _errorStr2 = 0;
 
-    delete [] _charBuffer;
-    _charBuffer = 0;
+    if (_charBuffer) {
+        delete [] _charBuffer;
+        _charBuffer = 0;
+    }
 
 #if 0
     _textPool.Trace( "text" );

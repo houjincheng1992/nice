@@ -9,6 +9,7 @@
 #include <boost/algorithm/string/join.hpp>
 
 #include <butil/time.h>
+#include <butil/hash.h>
 #include <vmime/vmime.hpp>
 #include "xls.h"
 
@@ -251,6 +252,8 @@ void NicerService::check_excel_status(
 
     std::string str = ctrl->request_attachment().to_string();
 
+    INFLOG << "hash string: " << butil::Hash(str);
+
     // 目前接口设计不太合理，但是目前multipart/form-data的库没有比较靠谱的
     std::string filename = get_query_param(ctrl, "filename", "");
     svc::FileType file_type = svc::get_file_type(filename);
@@ -262,20 +265,23 @@ void NicerService::check_excel_status(
     } else if (file_type == svc::FileType::XLSX) {
         // xlsx process
         MiniExcelReader::ExcelFile x;
-        if (!x.open(str.data(), str.size())) {
+        if (!x.open(str.c_str(), str.size())) {
             INFLOG << "cannot open xlsx";
             response_str = "{\"msg\":\"cannot open xlsx file.\", \"status\":-1}";
         } else {
-            MiniExcelReader::Sheet* sh = x.getSheet("Sheet3");
-            const MiniExcelReader::Range& dim = sh->getDimension();
-            for (int r = dim.firstRow; r <= dim.lastRow; r++)
-            {
-                for (int c = dim.firstCol; c <= dim.lastCol; c++)
+            MiniExcelReader::Sheet* sh = x.getSheet("Sheet1");
+            if (sh) {
+                const MiniExcelReader::Range& dim = sh->getDimension();
+                INFLOG << dim.firstRow << " " << dim.lastRow;
+                for (int r = dim.firstRow; r <= dim.lastRow; ++r)
                 {
-                    MiniExcelReader::Cell* cell = sh->getCell(r, c);
+                    for (int c = dim.firstCol; c <= dim.lastCol; c++)
+                    {
+                        MiniExcelReader::Cell* cell = sh->getCell(r, c);
 
-                    const char* str = cell ? cell->value.c_str() : ".";
-                    INFLOG << "detail: " << std::string(str);
+                        const char* str = cell ? cell->value.c_str() : ".";
+                        INFLOG << "detail: " << std::string(str);
+                    }
                 }
             }
         }

@@ -30,7 +30,7 @@ LIBPATHS=$(addprefix -L, $(LIBS))
 COMMA=,
 SOPATHS=$(addprefix -Wl$(COMMA)-rpath$(COMMA), $(LIBS))
 
-SERVER_SOURCES = $(wildcard source/*.cpp source/*/*.cpp)
+SERVER_SOURCES = $(wildcard source/*.cpp source/*/*.cpp thirdparty/zlib/*.cpp thirdparty/tinyxml2/tinyxml2.cpp thirdparty/minizip/ioapi.c thirdparty/minizip/ioapi_mem.c thirdparty/minizip/unzip.c)
 PROTOS = $(wildcard proto/*.proto)
 
 PROTO_OBJS = $(PROTOS:.proto=.pb.o)
