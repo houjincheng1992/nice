@@ -2,6 +2,8 @@
 
 #include <string>
 
+#include "utils/logger.h"
+
 namespace nicer {
 namespace xlsx {
 class Xlsx {
@@ -14,12 +16,13 @@ public:
 	}
 
 	std::string dump() {
-		#include <iostream>
-		std::cout << "dump " << *decompressed_data << std::endl;
+		INFLOG << "dump " << *decompressed_data;
+		return "";
 	}
 private:
 	std::string*  decompressed_data = nullptr;
 };
 Xlsx xlsx_open_buffer(std::string& data);
+
 }	// namespace xlsxutils
 }	// namespace nicer

@@ -16,6 +16,7 @@ HDRS+=./thirdparty/lua/include
 LIBS+=./thirdparty/lua/lib
 
 HDRS+=./thirdparty/rapidjson/include
+HDRS+=./thirdparty
 
 HDRS+=/usr/local/include
 LIBS+=/usr/local/lib

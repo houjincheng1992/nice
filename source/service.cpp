@@ -16,7 +16,7 @@
 #include "utils/numutils.h"
 #include "utils/url.h"
 #include "svc/checkservice.h"
-#include "xlsx/xlsx.h"
+#include "miniexcel/mini_excel_reader.h"
 
 namespace nicer {
 
@@ -255,14 +255,30 @@ void NicerService::check_excel_status(
     std::string filename = get_query_param(ctrl, "filename", "");
     svc::FileType file_type = svc::get_file_type(filename);
 
-    std::string response = "";
+    std::string response_str = "";
     if (file_type == svc::FileType::NOTVALID) {
         // not valid logic
-        response = "{\"msg\":\"file not valid, only excel support.\", \"status\":-1}";
+        response_str = "{\"msg\":\"file not valid, only excel support.\", \"status\":-1}";
     } else if (file_type == svc::FileType::XLSX) {
         // xlsx process
-        xlsx::Xlsx xlsx = xlsx::xlsx_open_buffer(str);
-        xlsx.dump();
+        MiniExcelReader::ExcelFile x;
+        if (!x.open(str.data(), str.size())) {
+            INFLOG << "cannot open xlsx";
+            response_str = "{\"msg\":\"cannot open xlsx file.\", \"status\":-1}";
+        } else {
+            MiniExcelReader::Sheet* sh = x.getSheet("Sheet3");
+            const MiniExcelReader::Range& dim = sh->getDimension();
+            for (int r = dim.firstRow; r <= dim.lastRow; r++)
+            {
+                for (int c = dim.firstCol; c <= dim.lastCol; c++)
+                {
+                    MiniExcelReader::Cell* cell = sh->getCell(r, c);
+
+                    const char* str = cell ? cell->value.c_str() : ".";
+                    INFLOG << "detail: " << std::string(str);
+                }
+            }
+        }
     } else if (file_type == svc::FileType::XLS) {
         // xls process
     }
@@ -353,7 +369,7 @@ void NicerService::check_excel_status(
     // }
 
     ctrl->http_response().set_content_type("application/json;charset=utf-8");
-    ctrl->response_attachment().append(response);
+    ctrl->response_attachment().append(response_str);
     gettimeofday(&tv1,NULL);
     INFLOG << "gettimeofday cost: " << (tv1.tv_sec - tv.tv_sec)*1000.0 + (tv1.tv_usec - tv.tv_usec)/1000.0<< "ms";
 }
